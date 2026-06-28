@@ -64,6 +64,37 @@ class PipelineRunOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+def _maybe_val(v: any) -> str:
+    return v.value if hasattr(v, 'value') else str(v)
+
+
+def _pipeline_to_out(p: Pipeline) -> PipelineOut:
+    return PipelineOut(
+        id=str(p.id),
+        space_id=str(p.space_id),
+        name=p.name,
+        description=p.description,
+        trigger_type=_maybe_val(p.trigger_type),
+        trigger_config=p.trigger_config,
+        task_design=p.task_design,
+        status=_maybe_val(p.status),
+        created_at=p.created_at.isoformat() if p.created_at else None,
+        last_run_at=p.last_run_at.isoformat() if p.last_run_at else None,
+    )
+
+
+def _run_to_out(r: PipelineRun) -> PipelineRunOut:
+    return PipelineRunOut(
+        id=str(r.id),
+        pipeline_id=str(r.pipeline_id),
+        status=r.status,
+        result_summary=r.result_summary,
+        error_message=r.error_message,
+        started_at=r.started_at.isoformat() if r.started_at else None,
+        completed_at=r.completed_at.isoformat() if r.completed_at else None,
+    )
+
+
 @router.get("", response_model=list[PipelineOut])
 async def list_pipelines(
     current_user: User = Depends(get_current_user),
@@ -79,21 +110,7 @@ async def list_pipelines(
         select(Pipeline).where(*conditions).order_by(desc(Pipeline.created_at))
     )
     pipelines = result.scalars().all()
-    return [
-        PipelineOut(
-            id=str(p.id),
-            space_id=str(p.space_id),
-            name=p.name,
-            description=p.description,
-            trigger_type=p.trigger_type.value if hasattr(p.trigger_type, 'value') else p.trigger_type,
-            trigger_config=p.trigger_config,
-            task_design=p.task_design,
-            status=p.status.value if hasattr(p.status, 'value') else p.status,
-            created_at=p.created_at.isoformat() if p.created_at else None,
-            last_run_at=p.last_run_at.isoformat() if p.last_run_at else None,
-        )
-        for p in pipelines
-    ]
+    return [_pipeline_to_out(p) for p in pipelines]
 
 
 @router.post("", response_model=PipelineOut, status_code=status.HTTP_201_CREATED)
@@ -124,18 +141,7 @@ async def create_pipeline(
     if pipeline.trigger_type == TriggerType.CRON and pipeline.status == PipelineStatus.ACTIVE:
         pipeline_scheduler.add_pipeline(str(pipeline.id), pipeline)
 
-    return PipelineOut(
-        id=str(pipeline.id),
-        space_id=str(pipeline.space_id),
-        name=pipeline.name,
-        description=pipeline.description,
-        trigger_type=pipeline.trigger_type.value,
-        trigger_config=pipeline.trigger_config,
-        task_design=pipeline.task_design,
-        status=pipeline.status.value,
-        created_at=pipeline.created_at.isoformat() if pipeline.created_at else None,
-        last_run_at=None,
-    )
+    return _pipeline_to_out(pipeline)
 
 
 @router.get("/{pipeline_id}", response_model=PipelineOut)
@@ -147,18 +153,7 @@ async def get_pipeline(
     pipeline = result.scalar_one_or_none()
     if not pipeline:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline not found")
-    return PipelineOut(
-        id=str(pipeline.id),
-        space_id=str(pipeline.space_id),
-        name=pipeline.name,
-        description=pipeline.description,
-        trigger_type=pipeline.trigger_type.value,
-        trigger_config=pipeline.trigger_config,
-        task_design=pipeline.task_design,
-        status=pipeline.status.value,
-        created_at=pipeline.created_at.isoformat() if pipeline.created_at else None,
-        last_run_at=pipeline.last_run_at.isoformat() if pipeline.last_run_at else None,
-    )
+    return _pipeline_to_out(pipeline)
 
 
 @router.patch("/{pipeline_id}", response_model=PipelineOut)
@@ -188,18 +183,7 @@ async def update_pipeline(
         pipeline_scheduler.add_pipeline(str(pipeline_id), pipeline)
 
     await db.flush()
-    return PipelineOut(
-        id=str(pipeline.id),
-        space_id=str(pipeline.space_id),
-        name=pipeline.name,
-        description=pipeline.description,
-        trigger_type=pipeline.trigger_type.value,
-        trigger_config=pipeline.trigger_config,
-        task_design=pipeline.task_design,
-        status=pipeline.status.value,
-        created_at=pipeline.created_at.isoformat() if pipeline.created_at else None,
-        last_run_at=pipeline.last_run_at.isoformat() if pipeline.last_run_at else None,
-    )
+    return _pipeline_to_out(pipeline)
 
 
 @router.delete("/{pipeline_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -226,18 +210,7 @@ async def list_runs(
         .limit(50)
     )
     runs = result.scalars().all()
-    return [
-        PipelineRunOut(
-            id=str(r.id),
-            pipeline_id=str(r.pipeline_id),
-            status=r.status,
-            result_summary=r.result_summary,
-            error_message=r.error_message,
-            started_at=r.started_at.isoformat() if r.started_at else None,
-            completed_at=r.completed_at.isoformat() if r.completed_at else None,
-        )
-        for r in runs
-    ]
+    return [_run_to_out(r) for r in runs]
 
 
 @router.post("/webhook/{pipeline_id}")

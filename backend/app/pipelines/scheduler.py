@@ -20,7 +20,8 @@ def get_scheduler() -> AsyncIOScheduler:
 
 def add_pipeline(pipeline_id: str, pipeline) -> None:
     """Add or update a cron trigger for a pipeline."""
-    if pipeline.trigger_type.value != "cron":
+    trigger_type = pipeline.trigger_type.value if hasattr(pipeline.trigger_type, 'value') else str(pipeline.trigger_type)
+    if trigger_type != "cron":
         return
 
     config = pipeline.trigger_config or {}
