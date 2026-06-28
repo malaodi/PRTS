@@ -7,6 +7,8 @@ import ChatPage from '@/pages/ChatPage'
 import SpacesPage from '@/pages/SpacesPage'
 import AssetsPage from '@/pages/AssetsPage'
 import ExplorePage from '@/pages/ExplorePage'
+import PipelinesPage from '@/pages/PipelinesPage'
+import SessionsPage from '@/pages/SessionsPage'
 import AppLayout from '@/layouts/AppLayout'
 
 export default function App() {
@@ -33,9 +35,11 @@ export default function App() {
       <Route path="/" element={isAuthenticated ? <AppLayout /> : <Navigate to="/login" />}>
         <Route index element={<ChatPage />} />
         <Route path="chat" element={<ChatPage />} />
-        <Route path="spaces" element={<SpacesPage />} />
+        <Route path="pipelines" element={<PipelinesPage />} />
         <Route path="assets" element={<AssetsPage />} />
         <Route path="explore" element={<ExplorePage />} />
+        <Route path="sessions" element={<SessionsPage />} />
+        <Route path="spaces" element={<SpacesPage />} />
       </Route>
     </Routes>
   )
