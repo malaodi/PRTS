@@ -6,7 +6,7 @@ from langchain_core.tools import BaseTool
 from app.tools.file_ops import read, write, edit, ls, glob_search, grep
 from app.tools.code_ops import bash, execute_python
 from app.tools.web_ops import web_fetch, web_search, http_request
-from app.tools.task_ops import todo_write, task
+from app.tools.task_ops import todo_write, task, roundtable, plan_mode
 from app.tools.document_ops import read_document
 
 BUILTIN_TOOLS: Dict[str, BaseTool] = {
@@ -23,6 +23,8 @@ BUILTIN_TOOLS: Dict[str, BaseTool] = {
     "http_request": http_request,
     "todo_write": todo_write,
     "task": task,
+    "roundtable": roundtable,
+    "plan_mode": plan_mode,
     "read_document": read_document,
 }
 
@@ -39,7 +41,9 @@ TOOL_DESCRIPTIONS: Dict[str, str] = {
     "web_search": "搜索互联网获取信息",
     "http_request": "发送 HTTP 请求到指定 URL",
     "todo_write": "管理多步骤任务清单，跟踪复杂任务进度",
-    "task": "将子任务委托给伙伴 Agent 执行",
+    "task": "将子任务委托给伙伴 Agent 执行，单次最多委托一个伙伴",
+    "roundtable": "发起多 Agent 圆桌讨论，多个专家共同讨论议题并生成结论",
+    "plan_mode": "进入规划模式，先制定执行计划等待确认后再执行",
     "read_document": "读取并解析文档文件（PDF/CSV/TXT 等）",
 }
 
