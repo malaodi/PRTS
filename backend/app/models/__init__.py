@@ -5,6 +5,7 @@ from app.models.asset import Asset, AgentAssetBinding
 from app.models.connection import Connection, ConnectionFieldValue
 from app.models.pipeline import Pipeline, PipelineRun
 from app.models.agent_config import Agent
+from app.models.channel import ChannelBinding, CLAccessSuite
 
 __all__ = [
     "User", "Space", "SpaceMember", "Session",
@@ -12,4 +13,5 @@ __all__ = [
     "Connection", "ConnectionFieldValue",
     "Pipeline", "PipelineRun",
     "Agent",
+    "ChannelBinding", "CLAccessSuite",
 ]
