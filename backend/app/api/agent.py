@@ -11,11 +11,14 @@ from app.database import get_db
 from app.models.session import Session
 from app.models.space import Space, SpaceMember
 from app.models.user import User
+from app.models.agent_config import Agent
 from app.api.deps import get_current_user, get_current_space_id, require_space_member
 from app.agent.runtime import get_compiled_agent, build_system_prompt, AgentState
 from app.agent.checkpointer import get_checkpointer
 from app.credentials.injector import load_credentials, inject_into_env, clear_from_env
 from app.files.workspace import get_workspace
+from app.assets.loader import load_agent_assets
+from app.config import get_settings
 from langchain_core.messages import HumanMessage
 
 router = APIRouter(prefix="/agent", tags=["agent"])
@@ -25,6 +28,7 @@ class ChatRequest(BaseModel):
     message: str
     thread_id: str | None = None
     model: str | None = None
+    agent_id: str | None = None
 
 
 class SessionOut(BaseModel):
@@ -110,18 +114,43 @@ async def chat(
         thread_id = f"space-{actual_space_id}-session-{session.id}"
         session.thread_id = thread_id
 
+    model_name = request.model
+    agent_name = f"{space_name} Assistant"
+    custom_prompt = None
+
+    if request.agent_id:
+        try:
+            agent_result = await db.execute(
+                select(Agent).where(Agent.id == UUID(request.agent_id))
+            )
+            agent = agent_result.scalar_one_or_none()
+            if agent:
+                agent_name = agent.name
+                if not model_name:
+                    model_name = agent.model
+                custom_prompt = agent.get_prompt_content()
+        except ValueError:
+            pass
+
+    if not model_name:
+        settings = get_settings()
+        model_name = settings.DEFAULT_MODEL
+
     system_prompt = build_system_prompt(
-        agent_name=f"{space_name} Assistant",
+        agent_name=agent_name,
         team_context=team_context,
         space_id=str(actual_space_id or ""),
     )
+
+    if custom_prompt:
+        system_prompt = custom_prompt
 
     checkpointer = await get_checkpointer()
 
     cred_ctx = await load_credentials(db, actual_space_id, current_user.id)
     inject_into_env(cred_ctx)
 
-    session_id = thread_id.replace(f"space-{actual_space_id}-session-", "") if not request.thread_id else str(session.id) if 'session' in dir() else thread_id
+    session_id = thread_id
     workspace = get_workspace(actual_space_id, thread_id)
     os_env = workspace.get_env_vars()
     for k, v in os_env.items():
@@ -130,9 +159,14 @@ async def chat(
     agent_graph = get_compiled_agent(
         space_id=str(actual_space_id or "default"),
         system_prompt=system_prompt,
-        model_name=request.model,
+        model_name=model_name,
         checkpointer=checkpointer,
     )
+
+    if request.agent_id:
+        assets = await load_agent_assets(db, actual_space_id, str(request.agent_id))
+        if assets.get("skill_text") and not custom_prompt:
+            system_prompt += "\n\n" + assets["skill_text"]
     config = {"configurable": {"thread_id": thread_id}}
 
     initial_state: AgentState = {

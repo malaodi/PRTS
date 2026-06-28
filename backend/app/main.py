@@ -9,6 +9,7 @@ from app.api.assets import router as assets_router
 from app.api.credentials import router as credentials_router
 from app.api.hub import router as hub_router
 from app.api.pipelines import router as pipelines_router
+from app.api.agents import router as agents_router
 
 settings = get_settings()
 
@@ -31,6 +32,7 @@ def create_app() -> FastAPI:
     app.include_router(credentials_router, prefix="/api/v1")
     app.include_router(hub_router, prefix="/api/v1")
     app.include_router(pipelines_router, prefix="/api/v1")
+    app.include_router(agents_router, prefix="/api/v1")
 
     @app.get("/api/v1/health")
     async def health():
