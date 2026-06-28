@@ -19,6 +19,8 @@ from langchain_core.tools import tool, BaseTool
 
 from app.config import get_settings
 from app.tools.registry import get_all_tools, get_tool_list_text
+from app.tools.loader import get_space_tools
+from app.assets.skills import discover_skills, get_skill_trigger_text
 
 settings = get_settings()
 
@@ -74,6 +76,7 @@ def build_system_prompt(
     agent_context: str = "",
     available_tools: str = "",
     team_context: str = "",
+    space_id: str = "",
 ) -> str:
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     env_info = f"当前时间: {now}\n"
@@ -84,6 +87,11 @@ def build_system_prompt(
 
     if not available_tools:
         available_tools = get_tool_list_text()
+
+    skills = discover_skills(space_id)
+    skills_text = get_skill_trigger_text(skills)
+    if skills_text:
+        available_tools += "\n\n" + skills_text
 
     return AGENT_SYSTEM_PROMPT.format(
         agent_name=agent_name,
@@ -110,8 +118,9 @@ def build_agent_graph(
     system_prompt: str | None = None,
     model_name: str | None = None,
     checkpointer=None,
+    space_id: str = "",
 ):
-    all_tools = get_all_tools()
+    all_tools = get_space_tools(space_id)
     if tools:
         all_tools.extend(tools)
 
@@ -163,6 +172,7 @@ def get_compiled_agent(
             system_prompt=system_prompt,
             model_name=model_name,
             checkpointer=checkpointer,
+            space_id=space_id,
         )
     return _agent_cache[key]
 

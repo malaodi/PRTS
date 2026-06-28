@@ -33,3 +33,4 @@ aiofiles>=24.0.0
 markdownify>=0.4.0
 apscheduler>=3.10.0
 cryptography>=42.0.0
+pyyaml>=6.0.0

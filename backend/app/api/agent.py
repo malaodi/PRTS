@@ -1,4 +1,5 @@
 import json
+import os
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -14,6 +15,7 @@ from app.api.deps import get_current_user, get_current_space_id, require_space_m
 from app.agent.runtime import get_compiled_agent, build_system_prompt, AgentState
 from app.agent.checkpointer import get_checkpointer
 from app.credentials.injector import load_credentials, inject_into_env, clear_from_env
+from app.files.workspace import get_workspace
 from langchain_core.messages import HumanMessage
 
 router = APIRouter(prefix="/agent", tags=["agent"])
@@ -111,12 +113,19 @@ async def chat(
     system_prompt = build_system_prompt(
         agent_name=f"{space_name} Assistant",
         team_context=team_context,
+        space_id=str(actual_space_id or ""),
     )
 
     checkpointer = await get_checkpointer()
 
     cred_ctx = await load_credentials(db, actual_space_id, current_user.id)
     inject_into_env(cred_ctx)
+
+    session_id = thread_id.replace(f"space-{actual_space_id}-session-", "") if not request.thread_id else str(session.id) if 'session' in dir() else thread_id
+    workspace = get_workspace(actual_space_id, thread_id)
+    os_env = workspace.get_env_vars()
+    for k, v in os_env.items():
+        os.environ[k] = v
 
     agent_graph = get_compiled_agent(
         space_id=str(actual_space_id or "default"),
