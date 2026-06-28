@@ -1,0 +1,154 @@
+import json
+from uuid import UUID
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, desc
+
+from app.database import get_db
+from app.models.session import Session
+from app.models.space import Space, SpaceMember
+from app.models.user import User
+from app.api.deps import get_current_user, get_current_space_id, require_space_member
+from app.agent.runtime import get_compiled_agent, build_system_prompt, AgentState
+from langchain_core.messages import HumanMessage, SystemMessage
+
+router = APIRouter(prefix="/agent", tags=["agent"])
+
+
+class ChatRequest(BaseModel):
+    message: str
+    thread_id: str | None = None
+    model: str | None = None
+
+
+class SessionOut(BaseModel):
+    id: str
+    thread_id: str
+    title: str | None
+    created_at: str | None
+
+    model_config = {"from_attributes": True}
+
+
+@router.get("/sessions", response_model=list[SessionOut])
+async def list_sessions(
+    current_user: User = Depends(get_current_user),
+    space_id: UUID | None = Depends(get_current_space_id),
+    db: AsyncSession = Depends(get_db),
+):
+    conditions = [Session.user_id == current_user.id]
+    if space_id:
+        conditions.append(Session.space_id == space_id)
+
+    result = await db.execute(
+        select(Session)
+        .where(*conditions)
+        .order_by(desc(Session.updated_at))
+        .limit(50)
+    )
+    sessions = result.scalars().all()
+    return [
+        SessionOut(
+            id=str(s.id),
+            thread_id=s.thread_id,
+            title=s.title,
+            created_at=s.created_at.isoformat() if s.created_at else None,
+        )
+        for s in sessions
+    ]
+
+
+@router.delete("/sessions/{session_id}", status_code=204)
+async def delete_session(
+    session_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Session).where(Session.id == session_id, Session.user_id == current_user.id)
+    )
+    session = result.scalar_one_or_none()
+    if session:
+        await db.delete(session)
+
+
+@router.post("/chat")
+async def chat(
+    request: ChatRequest,
+    current_user: User = Depends(get_current_user),
+    space_id: UUID | None = Depends(get_current_space_id),
+    member: SpaceMember = Depends(require_space_member),
+    db: AsyncSession = Depends(get_db),
+):
+    actual_space_id = space_id or member.space_id
+
+    team_context = ""
+    space_name = "PRTS"
+    if actual_space_id:
+        space_result = await db.execute(select(Space).where(Space.id == actual_space_id))
+        space = space_result.scalar_one_or_none()
+        if space:
+            team_context = space.team_context or ""
+            space_name = space.name
+
+    thread_id = request.thread_id
+    if not thread_id:
+        session = Session(
+            space_id=actual_space_id,
+            user_id=current_user.id,
+            thread_id="",
+            title=request.message[:100] if request.message else "New Chat",
+        )
+        db.add(session)
+        await db.flush()
+        thread_id = f"space-{actual_space_id}-session-{session.id}"
+        session.thread_id = thread_id
+
+    system_prompt = build_system_prompt(
+        agent_name=f"{space_name} Assistant",
+        team_context=team_context,
+    )
+
+    agent_graph = get_compiled_agent(
+        space_id=str(actual_space_id or "default"),
+        system_prompt=system_prompt,
+        model_name=request.model,
+    )
+    config = {"configurable": {"thread_id": thread_id}}
+
+    initial_state: AgentState = {
+        "messages": [HumanMessage(content=request.message)],
+    }
+
+    async def event_stream():
+        try:
+            async for event in agent_graph.astream_events(initial_state, config, version="v2"):
+                kind = event.get("event", "")
+                if kind == "on_chat_model_stream":
+                    data = event.get("data", {})
+                    chunk = data.get("chunk", None)
+                    if chunk and hasattr(chunk, "content") and chunk.content:
+                        yield f"data: {json.dumps({'content': chunk.content})}\n\n"
+                elif kind == "on_tool_start":
+                    tool_name = event.get("name", "")
+                    yield f"data: {json.dumps({'type': 'tool_start', 'name': tool_name})}\n\n"
+                elif kind == "on_tool_end":
+                    tool_name = event.get("name", "")
+                    yield f"data: {json.dumps({'type': 'tool_end', 'name': tool_name})}\n\n"
+            yield f"data: {json.dumps({'done': True})}\n\n"
+            yield "data: [DONE]\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )

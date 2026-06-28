@@ -1,0 +1,54 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: prts
+      POSTGRES_PASSWORD: prts
+      POSTGRES_DB: prts
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prts"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://prts:prts@postgres:5432/prts"
+      DATABASE_SYNC_URL: "postgresql+psycopg2://prts:prts@postgres:5432/prts"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      LANGCHAIN_API_KEY: "${LANGCHAIN_API_KEY:-}"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY:-}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - backend_sessions:/data/sessions
+      - backend_files:/data/files
+    command: >
+      sh -c "python -m app.init_db && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      VITE_API_URL: "http://localhost:8000/api/v1"
+
+volumes:
+  pgdata:
+  backend_sessions:
+  backend_files:
