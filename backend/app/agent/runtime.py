@@ -109,6 +109,7 @@ def build_agent_graph(
     tools: List[BaseTool] | None = None,
     system_prompt: str | None = None,
     model_name: str | None = None,
+    checkpointer=None,
 ):
     all_tools = get_all_tools()
     if tools:
@@ -139,7 +140,10 @@ def build_agent_graph(
     graph.add_conditional_edges("agent", tools_condition, {"tools": "tools", END: END})
     graph.add_edge("tools", "agent")
 
-    return graph.compile()
+    compile_kwargs = {}
+    if checkpointer is not None:
+        compile_kwargs["checkpointer"] = checkpointer
+    return graph.compile(**compile_kwargs)
 
 
 _agent_cache: dict[str, any] = {}
@@ -150,13 +154,15 @@ def get_compiled_agent(
     tools: List[BaseTool] | None = None,
     system_prompt: str | None = None,
     model_name: str | None = None,
+    checkpointer=None,
 ) -> any:
-    key = f"{space_id}_{model_name or 'default'}"
+    key = f"{space_id}_{model_name or 'default'}_{'cp' if checkpointer else 'nc'}"
     if key not in _agent_cache:
         _agent_cache[key] = build_agent_graph(
             tools=tools,
             system_prompt=system_prompt,
             model_name=model_name,
+            checkpointer=checkpointer,
         )
     return _agent_cache[key]
 

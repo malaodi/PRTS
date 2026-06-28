@@ -12,7 +12,9 @@ from app.models.space import Space, SpaceMember
 from app.models.user import User
 from app.api.deps import get_current_user, get_current_space_id, require_space_member
 from app.agent.runtime import get_compiled_agent, build_system_prompt, AgentState
-from langchain_core.messages import HumanMessage, SystemMessage
+from app.agent.checkpointer import get_checkpointer
+from app.credentials.injector import load_credentials, inject_into_env, clear_from_env
+from langchain_core.messages import HumanMessage
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 
@@ -111,10 +113,16 @@ async def chat(
         team_context=team_context,
     )
 
+    checkpointer = await get_checkpointer()
+
+    cred_ctx = await load_credentials(db, actual_space_id, current_user.id)
+    inject_into_env(cred_ctx)
+
     agent_graph = get_compiled_agent(
         space_id=str(actual_space_id or "default"),
         system_prompt=system_prompt,
         model_name=request.model,
+        checkpointer=checkpointer,
     )
     config = {"configurable": {"thread_id": thread_id}}
 
@@ -142,6 +150,8 @@ async def chat(
         except Exception as e:
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
             yield "data: [DONE]\n\n"
+        finally:
+            clear_from_env(cred_ctx)
 
     return StreamingResponse(
         event_stream(),
