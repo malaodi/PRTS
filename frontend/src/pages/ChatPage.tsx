@@ -260,8 +260,8 @@ function extractWidget(content: string): WidgetData | null {
   const start = content.lastIndexOf('[WIDGET:')
   if (start === -1) return null
   const jsonStart = start + 8
-  const end = content.indexOf(']', jsonStart)
-  if (end === -1) return null
+  const end = content.lastIndexOf(']')
+  if (end === -1 || end <= jsonStart) return null
   try { return JSON.parse(content.substring(jsonStart, end)) } catch { return null }
 }
 
