@@ -10,6 +10,9 @@ from app.tools.task_ops import todo_write, task, roundtable, plan_mode
 from app.tools.memory_ops import memory
 from app.agent.widgets import show_widget as show_widget_tool
 from app.tools.document_ops import read_document
+from app.tools.inspiration_ops import search_inspirations
+from app.tools.asset_creator import create_asset
+from app.tools.publish_ops import publish_asset
 
 BUILTIN_TOOLS: Dict[str, BaseTool] = {
     "read": read,
@@ -30,6 +33,9 @@ BUILTIN_TOOLS: Dict[str, BaseTool] = {
     "show_widget": show_widget_tool,
     "memory": memory,
     "read_document": read_document,
+    "search_inspirations": search_inspirations,
+    "create_asset": create_asset,
+    "publish_asset": publish_asset,
 }
 
 TOOL_DESCRIPTIONS: Dict[str, str] = {
@@ -51,6 +57,9 @@ TOOL_DESCRIPTIONS: Dict[str, str] = {
     "show_widget": "展示交互式卡片（确认/选择/展示/表单）给用户",
     "memory": "管理持久化记忆（write/read/search/list/forget），分user/feedback/project/reference四类",
     "read_document": "读取并解析文档文件（PDF/CSV/TXT 等）",
+    "search_inspirations": "搜索市场和团队的资产推荐，返回匹配的资产卡片",
+    "create_asset": "从对话中创建资产（技能/工具/伙伴/MCP/卡片/套件），弹窗确认后写入空间",
+    "publish_asset": "将资产发布到公共广场，通过AI审查后上架",
 }
 
 

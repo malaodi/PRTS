@@ -70,6 +70,14 @@ class AgentState(TypedDict):
     sub_agent_results: Optional[List[Dict]] = None
 
 
+BUILTIN_SKILLS_TEXT = """## 内置技能使用说明
+
+平台内置系统技能（skill-creator、subagent-creator 等）会通过 `read` 工具加载。
+当用户表达"保存为技能"、"创建伙伴"等意图时，使用 `read` 读取对应 SKILL.md 文件获取指导。
+资产沉淀流程：生成内容 → 调用 `create_asset` 工具弹窗确认 → 用户确认后写入空间。
+发布流程：调用 `publish_asset` 工具执行AI审查 → 索引到 Milvus 广场 → 上架。"""
+
+
 def build_system_prompt(
     agent_name: str = "PRTS Assistant",
     role_definition: str = DEFAULT_ROLE,
@@ -92,6 +100,8 @@ def build_system_prompt(
     skills_text = get_skill_trigger_text(skills)
     if skills_text:
         available_tools += "\n\n" + skills_text
+
+    available_tools += "\n\n" + BUILTIN_SKILLS_TEXT
 
     return AGENT_SYSTEM_PROMPT.format(
         agent_name=agent_name,

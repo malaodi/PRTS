@@ -22,6 +22,9 @@ from app.memories.recall import recall_relevant_memories
 from app.memories.extract import evaluate_extraction, apply_extraction
 from app.memories.manager import read_memory, read_entrypoint
 from app.config import get_settings
+from app.tools.memory_ops import set_memory_context
+from app.tools.inspiration_ops import set_inspiration_context
+from app.tools.asset_creator import set_creator_context
 from langchain_core.messages import HumanMessage
 
 router = APIRouter(prefix="/agent", tags=["agent"])
@@ -138,6 +141,11 @@ async def chat(
     if not model_name:
         settings = get_settings()
         model_name = settings.DEFAULT_MODEL
+
+    space_id_str = str(actual_space_id or "")
+    set_memory_context(space_id_str)
+    set_inspiration_context(space_id_str, thread_id)
+    set_creator_context(space_id_str, thread_id)
 
     system_prompt = build_system_prompt(
         agent_name=agent_name,

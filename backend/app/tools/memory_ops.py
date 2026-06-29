@@ -44,8 +44,6 @@ def memory(
         query: 搜索查询文本，search时使用
         file_name: 记忆文件名，read/forget时使用
     """
-    from app.api.agent import _current_space_id
-
     space_id = _get_current_space_id()
 
     if action == "write":

@@ -85,12 +85,15 @@ def hub_push(namespace: str, asset: Any, description: str = "") -> dict:
 
     Args:
         namespace: Hub namespace
-        asset: The asset object to push
+        asset: The asset object to push (None if only publishing via Milvus)
         description: Human-readable description
     """
     client = get_langsmith_client()
     if client is None:
         return {"error": "LangSmith API key not configured"}
+
+    if asset is None:
+        return {"status": "skipped", "namespace": namespace, "message": "Milvus-only publish, no LangSmith hub asset"}
 
     try:
         from langchain import hub

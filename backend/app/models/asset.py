@@ -13,6 +13,13 @@ class AssetType(str, enum.Enum):
     SUBAGENT = "subagent"
     MCP = "mcp"
     WIDGET = "widget"
+    PACK = "pack"
+
+
+class AssetVisibility(str, enum.Enum):
+    PRIVATE = "private"
+    TEAM = "team"
+    PUBLIC = "public"
 
 
 class BindStatus(str, enum.Enum):
@@ -32,6 +39,11 @@ class Asset(Base):
     description: Mapped[str | None] = mapped_column(Text)
     config: Mapped[dict | None] = mapped_column(JSONB)
     file_path: Mapped[str | None] = mapped_column(String(1000))
+
+    visibility: Mapped[str] = mapped_column(String(20), default="private", nullable=False, index=True)
+    tags: Mapped[str | None] = mapped_column(Text)
+    published_version: Mapped[str | None] = mapped_column(String(50))
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

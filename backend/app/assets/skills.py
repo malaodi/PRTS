@@ -103,14 +103,26 @@ def load_skill_context(skill: SkillManifest, include_refs: bool = False) -> str:
 
 
 def discover_skills(space_id: str = "") -> List[SkillManifest]:
-    """Discover all skills for a space by scanning skill directories."""
+    """Discover all skills for a space by scanning skill directories.
+    Also includes built-in system skills."""
     skills = []
+
+    # User skills from filesystem
     base = "/data/files"
     skills_dir = os.path.join(base, space_id, "skills") if space_id else os.path.join(base, "skills")
+    _scan_skills_dir(skills_dir, skills)
 
+    # Built-in system skills
+    builtin_skills_dir = os.path.join(os.path.dirname(__file__), "..", "skills")
+    builtin_skills_dir = os.path.normpath(builtin_skills_dir)
+    _scan_skills_dir(builtin_skills_dir, skills)
+
+    return skills
+
+
+def _scan_skills_dir(skills_dir: str, skills: list):
     if not os.path.isdir(skills_dir):
-        return skills
-
+        return
     for entry in sorted(os.listdir(skills_dir)):
         skill_path = os.path.join(skills_dir, entry)
         if os.path.isdir(skill_path):
@@ -118,8 +130,6 @@ def discover_skills(space_id: str = "") -> List[SkillManifest]:
             manifest = parse_skill_md(skill_md)
             if manifest:
                 skills.append(manifest)
-
-    return skills
 
 
 def get_skill_trigger_text(skills: List[SkillManifest]) -> str:

@@ -8,6 +8,7 @@ build/
 venv/
 *.egg
 .env.local
+.env
 
 # Node
 node_modules/

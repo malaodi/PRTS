@@ -4,11 +4,34 @@ from app.database import Base, engine, async_session_factory
 from app.models import User, Space, SpaceMember
 from app.models.space import MemberRole, SpaceType
 import asyncio
+from sqlalchemy import text
 
 
 async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+        # Phase 7 asset migration: add visibility/published columns if not exists
+        columns_to_add = [
+            ("visibility", "VARCHAR(20) DEFAULT 'private' NOT NULL"),
+            ("tags", "TEXT"),
+            ("published_version", "VARCHAR(50)"),
+            ("published_at", "TIMESTAMPTZ"),
+        ]
+        for col_name, col_def in columns_to_add:
+            try:
+                await conn.execute(text(
+                    f"ALTER TABLE assets ADD COLUMN IF NOT EXISTS {col_name} {col_def}"
+                ))
+            except Exception:
+                pass
+
+        try:
+            await conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_assets_visibility ON assets (visibility)"
+            ))
+        except Exception:
+            pass
 
     async with async_session_factory() as session:
         from sqlalchemy import select
