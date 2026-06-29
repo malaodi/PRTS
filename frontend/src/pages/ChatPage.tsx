@@ -57,6 +57,11 @@ export default function ChatPage() {
       setLoaded(true)
       return
     }
+    const token = localStorage.getItem('access_token')
+    if (!token) {
+      setLoaded(true)
+      return
+    }
     setThreadId(stored)
     api.get(`/agent/messages?thread_id=${encodeURIComponent(stored)}`)
       .then((res) => {
@@ -67,9 +72,11 @@ export default function ChatPage() {
         }))
         if (msgs.length > 0) setMessages(msgs)
       })
-      .catch(() => {})
+      .catch((err) => {
+        console.error('Load session messages failed:', err)
+      })
       .finally(() => setLoaded(true))
-  }, [currentSpace])
+  }, [])
 
   const isNearBottom = useCallback(() => {
     const el = messagesContainerRef.current
@@ -131,7 +138,7 @@ export default function ChatPage() {
           Authorization: `Bearer ${token}`,
           'X-Space-Id': spaceId || '',
         },
-        body: JSON.stringify({ message: userMsg.content, thread_id: threadId }),
+        body: JSON.stringify({ message: userMsg.content, thread_id: threadId || localStorage.getItem('current_thread_id') || '' }),
       })
 
       if (!response.ok) throw new Error('Chat request failed')
