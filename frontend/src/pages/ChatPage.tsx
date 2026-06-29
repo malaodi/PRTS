@@ -268,7 +268,7 @@ function extractWidget(content: string): WidgetData | null {
 function stripWidgetMarker(content: string): string {
   const start = content.lastIndexOf('[WIDGET:')
   if (start === -1) return content
-  const end = content.indexOf(']', start)
-  if (end === -1) return content
+  const end = content.lastIndexOf(']')
+  if (end === -1 || end <= start) return content
   return (content.substring(0, start) + content.substring(end + 1)).trim()
 }

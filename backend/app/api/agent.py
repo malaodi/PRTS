@@ -106,7 +106,7 @@ async def get_session_messages(
     session = result.scalar_one_or_none()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    return await _load_thread_messages(session.thread_id)
+    return await _load_thread_messages(session.thread_id, db)
 
 
 @router.get("/messages", response_model=list[MessageOut])
@@ -117,18 +117,21 @@ async def get_thread_messages(
     return await _load_thread_messages(thread_id)
 
 
-async def _load_thread_messages(thread_id: str) -> list[dict]:
-    """Load historical messages for a thread from the LangGraph checkpointer."""
+async def _load_thread_messages(thread_id: str, db=None) -> list[dict]:
+    """Load historical messages for a thread from the LangGraph checkpointer.
+    Falls back to session title if no messages stored (e.g., intercepted forms)."""
     try:
         from app.agent.checkpointer import get_checkpointer
         cp = await get_checkpointer()
         config = {"configurable": {"thread_id": thread_id}}
         state = await cp.aget_tuple(config)
         if not state or not state.checkpoint:
-            return []
+            return await _fallback_messages(thread_id, db)
 
         channel_values = state.checkpoint.get("channel_values", {})
         raw_messages = channel_values.get("messages", [])
+        if not raw_messages:
+            return await _fallback_messages(thread_id, db)
 
         out = []
         for m in raw_messages:
@@ -147,7 +150,36 @@ async def _load_thread_messages(thread_id: str) -> list[dict]:
             out.append({"role": role or 'assistant', "content": str(content)})
         return out
     except Exception:
-        return []
+        return await _fallback_messages(thread_id, db)
+
+
+async def _fallback_messages(thread_id: str, db=None) -> list[dict]:
+    """When checkpointer has no data, use session title as user message."""
+    try:
+        from uuid import UUID
+        # thread_id format: space-UUID-session-UUID
+        if "-session-" not in thread_id:
+            return []
+        sid = thread_id.split("-session-")[-1]
+        if not db:
+            from app.database import async_session_factory
+            from sqlalchemy import select
+            from app.models.session import Session
+            async with async_session_factory() as s:
+                result = await s.execute(select(Session).where(Session.id == UUID(sid)))
+                session = result.scalar_one_or_none()
+                if session and session.title:
+                    return [{"role": "user", "content": session.title}]
+        else:
+            from sqlalchemy import select
+            from app.models.session import Session
+            result = await db.execute(select(Session).where(Session.id == UUID(sid)))
+            session = result.scalar_one_or_none()
+            if session and session.title:
+                return [{"role": "user", "content": session.title}]
+    except Exception:
+        pass
+    return []
 
 
 @router.post("/chat")
@@ -242,7 +274,7 @@ async def chat(
         async def pipeline_form_stream():
             try:
                 yield f"data: {json.dumps({'type': 'metadata', 'thread_id': thread_id})}\n\n"
-                yield f"data: {json.dumps({'content': '好的，让我来分析你的需求，生成一份定制化的表单…\\n\\n'})}\n\n"
+                yield f"data: {json.dumps({'content': '根据你的需求，已生成定制表单，请填写后提交：'})}\n\n"
 
                 # Call LLM to generate custom form
                 form_widget = await _generate_pipeline_form(request.message)
