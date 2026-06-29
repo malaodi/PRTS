@@ -7,6 +7,7 @@ from app.tools.file_ops import read, write, edit, ls, glob_search, grep
 from app.tools.code_ops import bash, execute_python
 from app.tools.web_ops import web_fetch, web_search, http_request
 from app.tools.task_ops import todo_write, task, roundtable, plan_mode
+from app.tools.memory_ops import memory
 from app.agent.widgets import show_widget as show_widget_tool
 from app.tools.document_ops import read_document
 
@@ -27,6 +28,7 @@ BUILTIN_TOOLS: Dict[str, BaseTool] = {
     "roundtable": roundtable,
     "plan_mode": plan_mode,
     "show_widget": show_widget_tool,
+    "memory": memory,
     "read_document": read_document,
 }
 
@@ -47,6 +49,7 @@ TOOL_DESCRIPTIONS: Dict[str, str] = {
     "roundtable": "发起多 Agent 圆桌讨论，多个专家共同讨论议题并生成结论",
     "plan_mode": "进入规划模式，先制定执行计划等待确认后再执行",
     "show_widget": "展示交互式卡片（确认/选择/展示/表单）给用户",
+    "memory": "管理持久化记忆（write/read/search/list/forget），分user/feedback/project/reference四类",
     "read_document": "读取并解析文档文件（PDF/CSV/TXT 等）",
 }
 

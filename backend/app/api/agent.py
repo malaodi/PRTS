@@ -18,6 +18,9 @@ from app.agent.checkpointer import get_checkpointer
 from app.credentials.injector import load_credentials, inject_into_env, clear_from_env
 from app.files.workspace import get_workspace
 from app.assets.loader import load_agent_assets
+from app.memories.recall import recall_relevant_memories
+from app.memories.extract import evaluate_extraction, apply_extraction
+from app.memories.manager import read_memory, read_entrypoint
 from app.config import get_settings
 from langchain_core.messages import HumanMessage
 
@@ -145,6 +148,15 @@ async def chat(
     if custom_prompt:
         system_prompt = custom_prompt
 
+    # Inject relevant memories into system prompt
+    memories = await recall_relevant_memories(str(actual_space_id or ""), request.message)
+    if memories:
+        memory_lines = ["\n\n## 🧠 相关记忆\n"]
+        for i, m in enumerate(memories, 1):
+            fname = m.file_path.split("/")[-1] if m.file_path else ""
+            memory_lines.append(f"### {i}. {m.name}\n{m.content.strip()[:1000]}\n")
+        system_prompt += "".join(memory_lines)
+
     checkpointer = await get_checkpointer()
 
     cred_ctx = await load_credentials(db, actual_space_id, current_user.id)
@@ -174,6 +186,7 @@ async def chat(
     }
 
     async def event_stream():
+        assistant_content = []
         try:
             async for event in agent_graph.astream_events(initial_state, config, version="v2"):
                 kind = event.get("event", "")
@@ -181,6 +194,7 @@ async def chat(
                     data = event.get("data", {})
                     chunk = data.get("chunk", None)
                     if chunk and hasattr(chunk, "content") and chunk.content:
+                        assistant_content.append(chunk.content)
                         yield f"data: {json.dumps({'content': chunk.content})}\n\n"
                 elif kind == "on_tool_start":
                     tool_name = event.get("name", "")
@@ -195,6 +209,19 @@ async def chat(
             yield "data: [DONE]\n\n"
         finally:
             clear_from_env(cred_ctx)
+            # Post-turn memory extraction
+            try:
+                full_response = "".join(assistant_content)
+                if len(full_response) > 100:
+                    extraction = await evaluate_extraction(
+                        str(actual_space_id or ""),
+                        request.message,
+                        full_response,
+                    )
+                    if extraction:
+                        await apply_extraction(str(actual_space_id or ""), extraction)
+            except Exception:
+                pass
 
     return StreamingResponse(
         event_stream(),
