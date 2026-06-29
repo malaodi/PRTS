@@ -54,7 +54,7 @@ TOOL_DESCRIPTIONS: Dict[str, str] = {
     "task": "将子任务委托给伙伴 Agent 执行，单次最多委托一个伙伴",
     "roundtable": "发起多 Agent 圆桌讨论，多个专家共同讨论议题并生成结论",
     "plan_mode": "进入规划模式，先制定执行计划等待确认后再执行",
-    "show_widget": "展示交互式卡片（确认/选择/展示/表单）给用户",
+    "show_widget": "展示交互式卡片（确认/选择/表单/展示），表单支持text/select/textarea等字段类型",
     "memory": "管理持久化记忆（write/read/search/list/forget），分user/feedback/project/reference四类",
     "read_document": "读取并解析文档文件（PDF/CSV/TXT 等）",
     "search_inspirations": "搜索市场和团队的资产推荐，返回匹配的资产卡片",

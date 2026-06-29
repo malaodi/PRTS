@@ -73,11 +73,18 @@ def show_widget(
         widget_type: 卡片类型 (confirm/select/form/display)
         title: 卡片标题
         message: 提示消息
-        options: 选项列表(仅select类型), 每项含value和label
+        options: 对于select类型为选项列表每项含value和label；对于form类型为表单字段数组，每项结构为 {key, label, field_type, placeholder, required, default, options}，field_type支持text/select/textarea/multiselect/credential
         content: 展示内容(仅display类型)
         confirm_label: 确认按钮文字
         cancel_label: 取消按钮文字
         danger: 是否为危险操作
+
+    表单字段示例 (widget_type="form"时):
+    options=[
+      {\"key\":\"name\",\"label\":\"名称\",\"field_type\":\"text\",\"required\":true,\"default\":\"默认值\"},
+      {\"key\":\"trigger\",\"label\":\"触发方式\",\"field_type\":\"select\",\"required\":true,\"options\":[{\"value\":\"cron\",\"label\":\"定时\"},{\"value\":\"webhook\",\"label\":\"Webhook\"}]},
+      {\"key\":\"task\",\"label\":\"任务描述\",\"field_type\":\"textarea\",\"required\":true,\"placeholder\":\"描述要做什么\"},
+    ]
     """
     widget = {"type": widget_type, "title": title, "message": message}
 
