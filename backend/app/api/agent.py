@@ -88,6 +88,67 @@ async def delete_session(
         await db.delete(session)
 
 
+class MessageOut(BaseModel):
+    role: str
+    content: str
+
+
+@router.get("/sessions/{session_id}/messages", response_model=list[MessageOut])
+async def get_session_messages(
+    session_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Session).where(Session.id == session_id, Session.user_id == current_user.id)
+    )
+    session = result.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return await _load_thread_messages(session.thread_id)
+
+
+@router.get("/messages", response_model=list[MessageOut])
+async def get_thread_messages(
+    thread_id: str = Query(...),
+    current_user: User = Depends(get_current_user),
+):
+    return await _load_thread_messages(thread_id)
+
+
+async def _load_thread_messages(thread_id: str) -> list[dict]:
+    """Load historical messages for a thread from the LangGraph checkpointer."""
+    try:
+        from app.agent.checkpointer import get_checkpointer
+        cp = await get_checkpointer()
+        config = {"configurable": {"thread_id": thread_id}}
+        state = await cp.aget_tuple(config)
+        if not state or not state.checkpoint:
+            return []
+
+        channel_values = state.checkpoint.get("channel_values", {})
+        raw_messages = channel_values.get("messages", [])
+
+        out = []
+        for m in raw_messages:
+            role = getattr(m, 'type', None) or getattr(m, 'role', None)
+            if role == 'human':
+                role = 'user'
+            elif role == 'ai':
+                role = 'assistant'
+            elif role == 'tool':
+                continue
+            elif role == 'system':
+                continue
+            content = getattr(m, 'content', '') or ''
+            if isinstance(content, list):
+                content = ''.join(str(c) for c in content if isinstance(c, str))
+            out.append({"role": role or 'assistant', "content": str(content)})
+        return out
+    except Exception:
+        return []
+
+
 @router.post("/chat")
 async def chat(
     request: ChatRequest,

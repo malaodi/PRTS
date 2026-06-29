@@ -44,7 +44,7 @@ export default function SessionsPage() {
       navigate('/chat')
       return
     }
-    localStorage.setItem(`thread_${session.thread_id}`, session.thread_id)
+    localStorage.setItem('current_thread_id', session.thread_id)
     navigate(`/chat`)
   }
 
