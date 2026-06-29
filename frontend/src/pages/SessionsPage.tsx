@@ -347,7 +347,7 @@ function MsgBubble({ msg, onWidgetAction }: { msg: Message; onWidgetAction: (a: 
                   className={`w-full text-left px-2.5 py-1.5 rounded text-xs border ${selectedOpts.includes(o.value) ? 'border-primary-500 bg-primary-100' : 'border-gray-200 bg-white'}`}>{o.label}</button>
               ))}
             </div>
-            <button onClick={() => onWidgetAction('confirm', { selected: selectedOpts })} disabled={selectedOpts.length === 0} className="w-full px-3 py-1.5 rounded text-xs font-medium text-white bg-primary-600 disabled:opacity-50">确认</button>
+            <button onClick={() => onWidgetAction('confirm', { selected: selectedOpts.join(',') })} disabled={selectedOpts.length === 0} className="w-full px-3 py-1.5 rounded text-xs font-medium text-white bg-primary-600 disabled:opacity-50">确认</button>
           </div>
         )}
       </div>

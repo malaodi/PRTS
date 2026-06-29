@@ -226,6 +226,54 @@ async def chat(
             memory_lines.append(f"### {i}. {m.name}\n{m.content.strip()[:1000]}\n")
         system_prompt += "".join(memory_lines)
 
+    # Pipeline creation interceptor: detect keywords and return form widget directly
+    import re
+    pipeline_keywords = ["创建自动化", "创建管道", "创建pipeline", "定时任务", "自动化流程",
+                         "新建自动化", "帮我自动化", "做一个自动化", "搞一个自动化",
+                         "定时推送", "定时抓取", "定时执行", "定时发送",
+                         "竞品调研", "报告生成", "监控"]
+    msg_lower = request.message.lower()
+    is_pipeline_intent = any(kw.lower() in msg_lower for kw in pipeline_keywords) or \
+                         bool(re.search(r"每天.*点", msg_lower)) or \
+                         bool(re.search(r"每周.*点", msg_lower))
+
+    if is_pipeline_intent and not request.thread_id:
+        # Generate a default name from the user's message
+        default_name = request.message[:20].replace(" ", "")
+        default_task = request.message
+
+        form_widget = {
+            "type": "form",
+            "title": "创建自动化流程",
+            "message": "请填写以下信息，确认后将自动创建自动化任务",
+            "fields": [
+                {"key": "name", "label": "自动化名称", "field_type": "text", "required": True, "default": default_name},
+                {"key": "trigger_type", "label": "触发方式", "field_type": "select", "required": True,
+                 "options": [{"value": "cron", "label": "定时触发"}, {"value": "webhook", "label": "Webhook"}, {"value": "event", "label": "事件触发"}]},
+                {"key": "cron_expr", "label": "定时表达式", "field_type": "text", "placeholder": "0 9 * * *", "default": "0 9 * * *"},
+                {"key": "task_design", "label": "任务描述", "field_type": "textarea", "required": True, "default": default_task},
+                {"key": "visibility", "label": "可见性", "field_type": "select", "required": True,
+                 "options": [{"value": "private", "label": "仅自己"}, {"value": "team", "label": "团队"}, {"value": "public", "label": "广场"}]},
+            ],
+        }
+
+        async def pipeline_form_stream():
+            try:
+                yield f"data: {json.dumps({'type': 'metadata', 'thread_id': thread_id})}\n\n"
+                yield f"data: {json.dumps({'content': '我来帮你创建自动化流程，请填写以下表单：\\n\\n'})}\n\n"
+                yield f"data: {json.dumps({'content': '[WIDGET:' + json.dumps(form_widget, ensure_ascii=False) + ']'})}\n\n"
+                yield f"data: {json.dumps({'done': True})}\n\n"
+                yield "data: [DONE]\n\n"
+            except Exception as e:
+                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+                yield "data: [DONE]\n\n"
+
+        return StreamingResponse(
+            pipeline_form_stream(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+        )
+
     checkpointer = await get_checkpointer()
 
     cred_ctx = await load_credentials(db, actual_space_id, current_user.id)
