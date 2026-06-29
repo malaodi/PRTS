@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Send, Loader2, ArrowDown, Check, X, Wrench, ChevronDown, ChevronUp } from 'lucide-react'
 import { useSpaceStore } from '@/stores'
 import api from '@/api/client'
@@ -15,18 +16,10 @@ interface WidgetData {
   type: string
   title: string
   message: string
-  confirm_label?: string
-  cancel_label?: string
-  danger?: boolean
-  options?: Array<{ value: string; label: string; description?: string }>
-  multiple?: boolean
-  fields?: Array<{
-    key: string; label: string; field_type: string; placeholder?: string; required?: boolean; default?: string
-    options?: Array<{ value: string; label: string }>
-  }>
-  _source?: string
-  _creation_id?: string
-  _cards?: any[]
+  confirm_label?: string; cancel_label?: string; danger?: boolean
+  options?: Array<{ value: string; label: string; description?: string }>; multiple?: boolean
+  fields?: Array<{ key: string; label: string; field_type: string; placeholder?: string; required?: boolean; default?: string; options?: Array<{ value: string; label: string }> }>
+  _source?: string; _creation_id?: string; _cards?: any[]
 }
 
 export default function ChatPage() {
@@ -38,15 +31,30 @@ export default function ChatPage() {
   const [toolHistory, setToolHistory] = useState<string[]>([])
   const [showToolPanel, setShowToolPanel] = useState(false)
   const [threadId, setThreadId] = useState('')
+  const [loaded, setLoaded] = useState(false)
+  const [searchParams] = useSearchParams()
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const currentSpace = useSpaceStore((s) => s.currentSpace)
   const userScrolledUpRef = useRef(false)
 
-  // Clear any stored session on mount — fresh chat
+  // Load session if URL has ?session=xxx
   useEffect(() => {
-    localStorage.removeItem('current_thread_id')
-  }, [])
+    const sid = searchParams.get('session')
+    if (sid) {
+      setLoaded(false)
+      setMessages([])
+      localStorage.setItem('current_thread_id', sid)
+      setThreadId(sid)
+      api.get(`/agent/messages?thread_id=${encodeURIComponent(sid)}`)
+        .then((res) => {
+          const msgs = (res.data || []).map((m: any, i: number) => ({ id: `hist-${i}`, role: m.role as 'user' | 'assistant', content: m.content || '' }))
+          if (msgs.length > 0) setMessages(msgs)
+        }).catch(() => {}).finally(() => setLoaded(true))
+      return
+    }
+    setLoaded(true)
+  }, [searchParams])
 
   const isNearBottom = useCallback(() => {
     const el = messagesContainerRef.current; if (!el) return true
@@ -66,11 +74,7 @@ export default function ChatPage() {
     if (!input.trim() || streaming) return
     const userMsg: Message = { id: Date.now().toString(), role: 'user', content: input.trim() }
     setMessages((prev) => [...prev, userMsg])
-    setInput('')
-    setStreaming(true)
-    setActiveTools([])
-    setToolHistory([])
-    setShowToolPanel(false)
+    setInput(''); setStreaming(true); setActiveTools([]); setToolHistory([]); setShowToolPanel(false)
     userScrolledUpRef.current = false
 
     const assistantMsg: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: '' }
@@ -81,28 +85,23 @@ export default function ChatPage() {
       const spaceId = localStorage.getItem('current_space_id')
       const resp = await fetch('/api/v1/agent/chat', {
         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, 'X-Space-Id': spaceId || '' },
-        body: JSON.stringify({ message: userMsg.content }),
+        body: JSON.stringify({ message: userMsg.content, thread_id: threadId }),
       })
       if (!resp.ok) throw new Error('Failed')
-      const reader = resp.body?.getReader()
-      if (!reader) throw new Error('No body')
-      const decoder = new TextDecoder()
-      let content = ''
+      const reader = resp.body?.getReader(); if (!reader) throw new Error('No body')
+      const decoder = new TextDecoder(); let content = ''
       while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        const text = decoder.decode(value, { stream: true })
-        for (const line of text.split('\n')) {
+        const { done, value } = await reader.read(); if (done) break
+        for (const line of decoder.decode(value, { stream: true }).split('\n')) {
           if (!line.startsWith('data: ')) continue
-          const data = line.slice(6).trim()
-          if (data === '[DONE]') continue
+          const d = line.slice(6).trim(); if (d === '[DONE]') continue
           try {
-            const parsed = JSON.parse(data)
-            if (parsed.type === 'metadata' && parsed.thread_id) { setThreadId(parsed.thread_id); localStorage.setItem('current_thread_id', parsed.thread_id); continue }
-            if (parsed.type === 'tool_start' && parsed.name) { setActiveTools((p) => [...p, parsed.name]); setToolHistory((p) => [...p, parsed.name]); continue }
-            if (parsed.type === 'tool_end' && parsed.name) { setActiveTools((p) => p.filter((t) => t !== parsed.name)); continue }
-            if (parsed.content) { content += parsed.content; setMessages((prev) => prev.map((m) => m.id === assistantMsg.id ? { ...m, content } : m)) }
-            if (parsed.error) { content = `错误: ${parsed.error}`; setMessages((prev) => prev.map((m) => m.id === assistantMsg.id ? { ...m, content } : m)) }
+            const p = JSON.parse(d)
+            if (p.type === 'metadata' && p.thread_id) { setThreadId(p.thread_id); localStorage.setItem('current_thread_id', p.thread_id); continue }
+            if (p.type === 'tool_start' && p.name) { setActiveTools((pr) => [...pr, p.name]); setToolHistory((pr) => [...pr, p.name]); continue }
+            if (p.type === 'tool_end' && p.name) { setActiveTools((pr) => pr.filter((t) => t !== p.name)); continue }
+            if (p.content) { content += p.content; setMessages((prev) => prev.map((m) => m.id === assistantMsg.id ? { ...m, content } : m)) }
+            if (p.error) { content = `错误: ${p.error}`; setMessages((prev) => prev.map((m) => m.id === assistantMsg.id ? { ...m, content } : m)) }
           } catch {}
         }
       }
@@ -119,18 +118,17 @@ export default function ChatPage() {
 
   const handleWidgetAction = async (msgId: string, action: 'confirm' | 'cancel', formData?: Record<string, string>) => {
     setMessages((prev) => prev.map((m) => m.id === msgId ? { ...m, widgetResolved: true } : m))
-    const msg = messages.find((m) => m.id === msgId)
-    const w = msg?.widget; if (!w) return
+    const w = messages.find((m) => m.id === msgId)?.widget; if (!w) return
     if (action === 'cancel') { setMessages((prev) => prev.map((m) => m.id === msgId ? { ...m, content: (m.content || '') + '\n\n*已取消*' } : m)); return }
     if (w._source === 'asset_creator' && w._creation_id) {
-      try { const p = new URLSearchParams(); if (threadId) p.set('thread_id', threadId); if (w._creation_id) p.set('creation_id', w._creation_id); const r = await api.post(`/assets/confirm-pending?${p}`); setMessages((prev) => prev.map((m) => m.id === msgId ? { ...m, content: (m.content || '') + `\n\n> ${w.title || '资产'}已创建 (${r.data.id})` } : m)) }
+      try { const p = new URLSearchParams(); if (threadId) p.set('thread_id', threadId); if (w._creation_id) p.set('creation_id', w._creation_id); const r = await api.post(`/assets/confirm-pending?${p}`); setMessages((prev) => prev.map((m) => m.id === msgId ? { ...m, content: (m.content || '') + `\n\n> ${w.title || '资产'}已创建` } : m)) }
       catch { setMessages((prev) => prev.map((m) => m.id === msgId ? { ...m, content: (m.content || '') + '\n\n*创建失败*' } : m)) }
       return
     }
     if (w.type === 'form' && formData) {
       const payload: any = { name: formData.name || 'auto', description: formData.description || '', trigger_type: formData.trigger_type || 'cron', trigger_config: { expression: formData.cron_expr || '0 9 * * *' }, task_design: formData.task_design || '', visibility: formData.visibility || 'private' }
       try { const r = await api.post('/pipelines/from-conversation', payload); setMessages((prev) => prev.map((m) => m.id === msgId ? { ...m, content: (m.content || '') + `\n\n> 自动化「${r.data.name}」已创建` } : m)) }
-      catch (e: any) { setMessages((prev) => prev.map((m) => m.id === msgId ? { ...m, content: (m.content || '') + `\n\n*创建失败: ${e?.response?.data?.detail || '未知'}*` } : m)) }
+      catch (e: any) { setMessages((prev) => prev.map((m) => m.id === msgId ? { ...m, content: (m.content || '') + `\n\n*创建失败*` } : m)) }
     }
   }
 
@@ -140,11 +138,12 @@ export default function ChatPage() {
     <div className="flex-1 flex flex-col overflow-hidden">
       <header className="bg-white border-b border-gray-200 px-6 py-3 shrink-0">
         <h2 className="text-sm font-semibold text-gray-900">{currentSpace ? currentSpace.name : 'PRTS Assistant'}</h2>
-        <p className="text-xs text-gray-400">新会话</p>
+        <p className="text-xs text-gray-400">{threadId ? '继续对话' : '新会话'}</p>
       </header>
-
       <div ref={messagesContainerRef} onScroll={handleContainerScroll} className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-        {messages.length === 0 && (
+        {!loaded ? (
+          <div className="flex items-center justify-center h-full"><Loader2 className="w-6 h-6 animate-spin text-gray-300" /></div>
+        ) : messages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
               <div className="w-16 h-16 bg-primary-100 rounded-2xl flex items-center justify-center mx-auto mb-4"><Send className="w-8 h-8 text-primary-500" /></div>
@@ -152,8 +151,9 @@ export default function ChatPage() {
               <p className="text-sm text-gray-400 mt-1">在下方输入你的问题，AI Agent 会帮你解决任务</p>
             </div>
           </div>
+        ) : (
+          messages.map((msg) => <MsgB key={msg.id} msg={msg} onWidgetAction={(a, d) => handleWidgetAction(msg.id, a, d)} />)
         )}
-        {messages.map((msg) => <MsgB key={msg.id} msg={msg} onWidgetAction={(a, d) => handleWidgetAction(msg.id, a, d)} />)}
         <div ref={messagesEndRef} />
         {showScrollBtn && (
           <div className="sticky bottom-0 flex justify-center pb-2">
@@ -167,14 +167,14 @@ export default function ChatPage() {
         <div className="shrink-0 bg-gray-50 border-t border-gray-100">
           <button onClick={() => setShowToolPanel(!showToolPanel)} className="w-full flex items-center gap-2 px-4 py-1.5 text-xs text-gray-400 hover:text-gray-600">
             <Wrench className={`w-3 h-3 ${activeTools.length > 0 ? 'animate-spin' : 'text-green-400'}`} />
-            <span className="truncate">{activeTools.length > 0 ? `正在执行: ${activeTools.join(', ')}...` : `工具调用记录 (${toolHistory.length})`}</span>
+            <span className="truncate">{activeTools.length > 0 ? `正在执行: ${activeTools.join(', ')}...` : `工具记录 (${toolHistory.length})`}</span>
             <span className="ml-auto">{showToolPanel ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}</span>
           </button>
           {showToolPanel && (
             <div className="px-4 pb-2 max-h-32 overflow-y-auto">
               {toolHistory.map((t, i) => (
                 <div key={`${t}-${i}`} className="flex items-center gap-2 text-xs py-0.5">
-                  {activeTools.includes(t) ? <Loader2 className="w-3 h-3 animate-spin text-blue-400 shrink-0" /> : <Check className="w-3 h-3 text-green-400 shrink-0" />}
+                  {activeTools.includes(t) ? <Loader2 className="w-3 h-3 animate-spin text-blue-400" /> : <Check className="w-3 h-3 text-green-400" />}
                   <span className={activeTools.includes(t) ? 'text-gray-600' : 'text-gray-400'}>{t}</span>
                 </div>
               ))}
@@ -198,7 +198,6 @@ export default function ChatPage() {
 }
 
 function MsgB({ msg, onWidgetAction }: { msg: Message; onWidgetAction: (a: 'confirm' | 'cancel', d?: Record<string, string>) => void }) {
-  const [sel, setSel] = useState<string[]>([])
   if (!msg.widget || msg.widgetResolved) return (
     <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
       <div className={`max-w-[75%] rounded-2xl px-4 py-3 text-sm ${msg.role === 'user' ? 'bg-primary-600 text-white' : 'bg-white border border-gray-200 text-gray-800'}`}>
@@ -229,14 +228,14 @@ function MsgB({ msg, onWidgetAction }: { msg: Message; onWidgetAction: (a: 'conf
                 <div key={f.key}>
                   <label className="block text-xs font-medium text-gray-600 mb-1">{f.label}{f.required && <span className="text-red-500">*</span>}</label>
                   {f.field_type === 'select' ? (
-                    <select name={f.key} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white" defaultValue={f.default} required={f.required}>
+                    <select name={f.key} defaultValue={f.default} required={f.required} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white">
                       <option value="">请选择</option>
                       {f.options?.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                     </select>
                   ) : f.field_type === 'textarea' ? (
-                    <textarea name={f.key} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none" rows={3} placeholder={f.placeholder} defaultValue={f.default} required={f.required} />
+                    <textarea name={f.key} placeholder={f.placeholder} defaultValue={f.default} required={f.required} rows={3} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none" />
                   ) : (
-                    <input name={f.key} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder={f.placeholder} defaultValue={f.default} required={f.required} />
+                    <input name={f.key} placeholder={f.placeholder} defaultValue={f.default} required={f.required} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
                   )}
                 </div>
               ))}
