@@ -238,7 +238,7 @@ async def chat(
                          bool(re.search(r"每天.*点", msg_lower)) or \
                          bool(re.search(r"每周.*点", msg_lower))
 
-    if is_pipeline_intent and not request.thread_id:
+    if is_pipeline_intent:
         async def pipeline_form_stream():
             try:
                 yield f"data: {json.dumps({'type': 'metadata', 'thread_id': thread_id})}\n\n"
