@@ -3,7 +3,7 @@ import enum
 from datetime import datetime
 from sqlalchemy import String, DateTime, ForeignKey, func, Text, Integer, Boolean
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.dialects.postgresql import UUID, JSONB, ARRAY
 from app.database import Base
 
 
@@ -29,6 +29,9 @@ class Pipeline(Base):
     space_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("spaces.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    asset_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("assets.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     trigger_type: Mapped[TriggerType] = mapped_column(String(20), nullable=False)
@@ -36,6 +39,11 @@ class Pipeline(Base):
     task_design: Mapped[str] = mapped_column(Text, nullable=False)
     variables_schema: Mapped[dict | None] = mapped_column(JSONB)
     status: Mapped[PipelineStatus] = mapped_column(String(20), default=PipelineStatus.ACTIVE)
+    visibility: Mapped[str] = mapped_column(String(20), default="private", nullable=False, index=True)
+    tags: Mapped[str | None] = mapped_column(Text)
+    published_version: Mapped[str | None] = mapped_column(String(50))
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    requires_connections: Mapped[list | None] = mapped_column(JSONB)
 
     max_iterations: Mapped[int] = mapped_column(Integer, default=50)
     timeout_seconds: Mapped[int] = mapped_column(Integer, default=300)

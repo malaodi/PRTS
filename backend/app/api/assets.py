@@ -250,6 +250,26 @@ async def share_asset_to_team(
     return _asset_to_out(asset)
 
 
+@router.get("/team/list", response_model=list[AssetOut])
+async def list_team_assets(
+    current_user: User = Depends(get_current_user),
+    space_id: UUID | None = Depends(get_current_space_id),
+    member: SpaceMember = Depends(require_space_member),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all team members' public/team assets in the current space."""
+    actual_space_id = space_id or member.space_id
+
+    result = await db.execute(
+        select(Asset).where(
+            Asset.space_id == actual_space_id,
+            Asset.visibility.in_(["team", "public"]),
+        ).order_by(Asset.updated_at.desc())
+    )
+    assets = result.scalars().all()
+    return [_asset_to_out(a) for a in assets]
+
+
 @router.get("/bindings/{agent_id}", response_model=list[BindingOut])
 async def list_bindings(
     agent_id: str,
@@ -329,19 +349,30 @@ def _write_asset_file(space_id: str, asset_id: UUID, asset_type: str, content: s
     dir_path = os.path.join("/data/files", space_id, sub_dir)
     os.makedirs(dir_path, exist_ok=True)
 
-    file_names = {
-        "skill": "SKILL.md",
-        "tool": "tool.json",
-        "subagent": "agent.md",
-        "mcp": "mcp.json",
-        "widget": "widget.json",
-        "pack": "pack.json",
-    }
-    file_name = file_names.get(asset_type, "asset.md")
-    file_path = os.path.join(dir_path, file_name)
-
-    with open(file_path, "w", encoding="utf-8") as f:
-        f.write(content)
+    if asset_type == "tool":
+        tool_json_path = os.path.join(dir_path, "tool.json")
+        main_py_path = os.path.join(dir_path, "main.py")
+        try:
+            data = json.loads(content) if content else {}
+        except json.JSONDecodeError:
+            data = {"name": "custom_tool", "description": content}
+        with open(tool_json_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        main_py_content = f'''"""Auto-generated custom tool."""\nimport json\n\ndef execute(**kwargs) -> str:\n    return json.dumps({{"result": "ok", "input": kwargs}}, ensure_ascii=False)\n'''
+        with open(main_py_path, "w", encoding="utf-8") as f:
+            f.write(main_py_content)
+    else:
+        file_names = {
+            "skill": "SKILL.md",
+            "subagent": "agent.md",
+            "mcp": "mcp.json",
+            "widget": "widget.json",
+            "pack": "pack.json",
+        }
+        file_name = file_names.get(asset_type, "asset.md")
+        file_path = os.path.join(dir_path, file_name)
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(content)
 
 
 def _read_asset_file(space_id: str, asset_id: UUID, asset_type: str) -> str:

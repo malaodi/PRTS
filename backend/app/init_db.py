@@ -12,13 +12,13 @@ async def init_db():
         await conn.run_sync(Base.metadata.create_all)
 
         # Phase 7 asset migration: add visibility/published columns if not exists
-        columns_to_add = [
+        asset_cols = [
             ("visibility", "VARCHAR(20) DEFAULT 'private' NOT NULL"),
             ("tags", "TEXT"),
             ("published_version", "VARCHAR(50)"),
             ("published_at", "TIMESTAMPTZ"),
         ]
-        for col_name, col_def in columns_to_add:
+        for col_name, col_def in asset_cols:
             try:
                 await conn.execute(text(
                     f"ALTER TABLE assets ADD COLUMN IF NOT EXISTS {col_name} {col_def}"
@@ -29,6 +29,30 @@ async def init_db():
         try:
             await conn.execute(text(
                 "CREATE INDEX IF NOT EXISTS ix_assets_visibility ON assets (visibility)"
+            ))
+        except Exception:
+            pass
+
+        # Phase 8 pipeline migration: add visibility/asset_id/published columns
+        pipeline_cols = [
+            ("asset_id", "UUID REFERENCES assets(id) ON DELETE SET NULL"),
+            ("visibility", "VARCHAR(20) DEFAULT 'private' NOT NULL"),
+            ("tags", "TEXT"),
+            ("published_version", "VARCHAR(50)"),
+            ("published_at", "TIMESTAMPTZ"),
+            ("requires_connections", "JSONB"),
+        ]
+        for col_name, col_def in pipeline_cols:
+            try:
+                await conn.execute(text(
+                    f"ALTER TABLE pipelines ADD COLUMN IF NOT EXISTS {col_name} {col_def}"
+                ))
+            except Exception:
+                pass
+
+        try:
+            await conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_pipelines_visibility ON pipelines (visibility)"
             ))
         except Exception:
             pass

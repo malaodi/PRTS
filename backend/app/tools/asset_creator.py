@@ -40,24 +40,24 @@ def create_asset(
     tags: str = "",
     config: str = "",
 ) -> str:
-    """从对话中创建资产（技能/工具/伙伴/MCP/卡片/能力套件）。Agent生成资产内容后调用此工具，弹窗让用户确认。
+    """从对话中创建资产（技能/工具/伙伴/MCP/卡片/能力套件/自动化）。Agent生成资产内容后调用此工具，弹窗让用户确认。
 
     当Agent想将对话中的知识、代码、角色定义等沉淀为资产时调用。
     用户确认后，资产写入空间并可在设置页查看和装备。
 
     Args:
-        asset_type: 资产类型 (skill/tool/subagent/mcp/widget/pack)
+        asset_type: 资产类型 (skill/tool/subagent/mcp/widget/pack/pipeline)
         name: 资产名称，3-30个字符
         description: 资产描述，一行文字说明其功能
-        content: 资产核心内容（SKILL.md全文 / tool.json / agent.md / mcp.json / widget配置 / pack.json）
+        content: 资产核心内容（SKILL.md全文 / tool.json / agent.md / mcp.json / widget配置 / pack.json / 自动化任务描述）
         visibility: 可见性 (private/team/public)，默认private。team=空间成员可见，public=发布到广场
         tags: 标签，逗号分隔，如 "数据分析,财务报表"
-        config: 附加配置JSON字符串，如工具的运行参数
+        config: 附加配置JSON字符串，如工具的运行参数。对于pipeline类型，应包含trigger_type/cron_expr等
     """
     if not asset_type or not name or not content:
         return "错误: create_asset 需要 asset_type、name 和 content 参数"
 
-    valid_types = ("skill", "tool", "subagent", "mcp", "widget", "pack")
+    valid_types = ("skill", "tool", "subagent", "mcp", "widget", "pack", "pipeline")
     if asset_type not in valid_types:
         return f"错误: asset_type 必须是 {', '.join(valid_types)} 之一"
 
@@ -81,7 +81,7 @@ def create_asset(
 
     type_labels = {
         "skill": "技能", "tool": "工具", "subagent": "伙伴",
-        "mcp": "MCP", "widget": "卡片", "pack": "能力套件",
+        "mcp": "MCP", "widget": "卡片", "pack": "能力套件", "pipeline": "自动化",
     }
     vis_labels = {"private": "仅自己", "team": "团队可见", "public": "公开发布"}
 

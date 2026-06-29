@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import api from '@/api/client'
 import { useSpaceStore } from '@/stores'
-import { Box, Plus, Trash2, Link as LinkIcon, Wrench, Bot, Plug, Layout } from 'lucide-react'
+import { Box, Plus, Trash2, Link as LinkIcon, Wrench, Bot, Plug, Layout, Zap } from 'lucide-react'
 
 interface Asset {
   id: string
@@ -10,6 +10,7 @@ interface Asset {
   name: string
   description: string | null
   config: any
+  visibility: string | null
   created_at: string | null
 }
 
@@ -19,6 +20,7 @@ const ASSET_TYPES = [
   { key: 'subagent', label: '伙伴', icon: Bot, color: 'text-purple-600 bg-purple-50' },
   { key: 'mcp', label: 'MCP', icon: Plug, color: 'text-orange-600 bg-orange-50' },
   { key: 'widget', label: '卡片', icon: Layout, color: 'text-pink-600 bg-pink-50' },
+  { key: 'pipeline', label: '自动化', icon: Zap, color: 'text-cyan-600 bg-cyan-50' },
 ]
 
 export default function AssetsPage() {

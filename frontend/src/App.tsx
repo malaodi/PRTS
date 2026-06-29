@@ -9,6 +9,7 @@ import AssetsPage from '@/pages/AssetsPage'
 import ExplorePage from '@/pages/ExplorePage'
 import PipelinesPage from '@/pages/PipelinesPage'
 import SessionsPage from '@/pages/SessionsPage'
+import StudioPage from '@/pages/StudioPage'
 import AppLayout from '@/layouts/AppLayout'
 
 export default function App() {
@@ -40,6 +41,7 @@ export default function App() {
         <Route path="explore" element={<ExplorePage />} />
         <Route path="sessions" element={<SessionsPage />} />
         <Route path="spaces" element={<SpacesPage />} />
+        <Route path="studio" element={<StudioPage />} />
       </Route>
     </Routes>
   )

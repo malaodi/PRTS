@@ -13,6 +13,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Plus,
+  Folder,
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -195,7 +196,20 @@ export default function AppLayout() {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden">
-        <Outlet />
+        {/* Header bar */}
+        <div className="flex items-center justify-end px-4 py-1.5 border-b border-gray-200 bg-white shrink-0">
+          <Link
+            to="/studio"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+            title="工作室"
+          >
+            <Folder className="w-4 h-4" />
+            <span>工作室</span>
+          </Link>
+        </div>
+        <div className="flex-1 overflow-hidden">
+          <Outlet />
+        </div>
       </main>
     </div>
   )

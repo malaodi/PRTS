@@ -13,6 +13,24 @@ from app.memories.recall import recall_relevant_memories
 
 settings = get_settings()
 
+
+def _get_llm():
+    api_key = settings.OPENAI_API_KEY or settings.DEEPSEEK_API_KEY
+    if not api_key:
+        return None
+    if settings.DEEPSEEK_API_KEY and not settings.OPENAI_API_KEY:
+        return ChatOpenAI(
+            model="deepseek-chat",
+            temperature=0,
+            openai_api_key=settings.DEEPSEEK_API_KEY,
+            base_url="https://api.deepseek.com/v1",
+        )
+    return ChatOpenAI(
+        model="gpt-3.5-turbo",
+        temperature=0,
+        openai_api_key=settings.OPENAI_API_KEY,
+    )
+
 EXTRACT_PROMPT = """你是一个记忆提取助手。分析对话内容，判断是否有值得保存的记忆。
 
 值得保存的记忆类型:
@@ -45,6 +63,10 @@ async def evaluate_extraction(
     assistant_response: str,
 ) -> dict | None:
     """Evaluate whether a conversation turn should produce a memory."""
+    llm = _get_llm()
+    if llm is None:
+        return None
+
     entries = read_entrypoint(space_id)
     existing_manifest = ""
     if entries:
@@ -53,11 +75,6 @@ async def evaluate_extraction(
         )
 
     try:
-        llm = ChatOpenAI(
-            model="gpt-3.5-turbo",
-            temperature=0,
-            openai_api_key=settings.OPENAI_API_KEY,
-        )
         messages = [
             SystemMessage(content=EXTRACT_PROMPT),
             HumanMessage(content=f"""{existing_manifest}

@@ -22,9 +22,10 @@ class Settings(BaseSettings):
     LANGCHAIN_PROJECT: str = "prts-platform"
     LANGCHAIN_TRACING_V2: bool = True
 
-    DEFAULT_MODEL: str = "gpt-4"
+    DEFAULT_MODEL: str = "deepseek-chat"
     OPENAI_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""
+    DEEPSEEK_API_KEY: str = ""
 
     ADMIN_EMAIL: str = "admin@prts.local"
     ADMIN_PASSWORD: str = "admin123"

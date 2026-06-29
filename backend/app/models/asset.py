@@ -14,6 +14,7 @@ class AssetType(str, enum.Enum):
     MCP = "mcp"
     WIDGET = "widget"
     PACK = "pack"
+    PIPELINE = "pipeline"
 
 
 class AssetVisibility(str, enum.Enum):

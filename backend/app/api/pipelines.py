@@ -12,6 +12,7 @@ from app.database import get_db
 from app.models.user import User
 from app.models.space import SpaceMember
 from app.models.pipeline import Pipeline, PipelineRun, PipelineStatus, TriggerType
+from app.models.asset import Asset, AssetType
 from app.api.deps import get_current_user, get_current_space_id, require_space_member
 from app.pipelines.scheduler import pipeline_scheduler
 
@@ -25,6 +26,9 @@ class PipelineCreate(BaseModel):
     trigger_config: dict | None = None
     task_design: str
     variables_schema: dict | None = None
+    visibility: str = "private"
+    tags: str = ""
+    requires_connections: list = []
     max_iterations: int = 50
     timeout_seconds: int = 300
 
@@ -35,17 +39,22 @@ class PipelineUpdate(BaseModel):
     trigger_config: dict | None = None
     task_design: str | None = None
     status: str | None = None
+    visibility: str | None = None
 
 
 class PipelineOut(BaseModel):
     id: str
     space_id: str
+    asset_id: str | None
     name: str
     description: str | None
     trigger_type: str
     trigger_config: dict | None
     task_design: str
     status: str
+    visibility: str | None
+    tags: str | None
+    requires_connections: list | None
     created_at: str | None
     last_run_at: str | None
 
@@ -72,12 +81,16 @@ def _pipeline_to_out(p: Pipeline) -> PipelineOut:
     return PipelineOut(
         id=str(p.id),
         space_id=str(p.space_id),
+        asset_id=str(p.asset_id) if p.asset_id else None,
         name=p.name,
         description=p.description,
         trigger_type=_maybe_val(p.trigger_type),
         trigger_config=p.trigger_config,
         task_design=p.task_design,
         status=_maybe_val(p.status),
+        visibility=p.visibility if hasattr(p, 'visibility') else "private",
+        tags=p.tags if hasattr(p, 'tags') else None,
+        requires_connections=p.requires_connections if hasattr(p, 'requires_connections') else None,
         created_at=p.created_at.isoformat() if p.created_at else None,
         last_run_at=p.last_run_at.isoformat() if p.last_run_at else None,
     )
@@ -93,6 +106,46 @@ def _run_to_out(r: PipelineRun) -> PipelineRunOut:
         started_at=r.started_at.isoformat() if r.started_at else None,
         completed_at=r.completed_at.isoformat() if r.completed_at else None,
     )
+
+
+async def _sync_pipeline_asset(pipeline: Pipeline, db: AsyncSession):
+    """Sync pipeline to assets table."""
+    if pipeline.asset_id:
+        result = await db.execute(select(Asset).where(Asset.id == pipeline.asset_id))
+        asset = result.scalar_one_or_none()
+        if asset:
+            asset.name = pipeline.name
+            asset.description = pipeline.description
+            asset.visibility = pipeline.visibility if hasattr(pipeline, 'visibility') else "private"
+            asset.tags = pipeline.tags if hasattr(pipeline, 'tags') else None
+            asset.config = {
+                "trigger_type": _maybe_val(pipeline.trigger_type),
+                "trigger_config": pipeline.trigger_config,
+                "task_design": pipeline.task_design,
+                "requires_connections": pipeline.requires_connections,
+            }
+            return pipeline.asset_id
+
+    asset = Asset(
+        space_id=pipeline.space_id,
+        asset_type=AssetType("pipeline"),
+        name=pipeline.name,
+        description=pipeline.description,
+        visibility=pipeline.visibility if hasattr(pipeline, 'visibility') else "private",
+        tags=pipeline.tags if hasattr(pipeline, 'tags') else None,
+        config={
+            "pipeline_id": str(pipeline.id),
+            "trigger_type": _maybe_val(pipeline.trigger_type),
+            "trigger_config": pipeline.trigger_config,
+            "task_design": pipeline.task_design,
+            "requires_connections": pipeline.requires_connections,
+        },
+        created_by=pipeline.created_by,
+    )
+    db.add(asset)
+    await db.flush()
+    pipeline.asset_id = asset.id
+    return asset.id
 
 
 @router.get("", response_model=list[PipelineOut])
@@ -131,6 +184,9 @@ async def create_pipeline(
         trigger_config=data.trigger_config,
         task_design=data.task_design,
         variables_schema=data.variables_schema,
+        visibility=data.visibility,
+        tags=data.tags or None,
+        requires_connections=data.requires_connections or None,
         max_iterations=data.max_iterations,
         timeout_seconds=data.timeout_seconds,
         created_by=current_user.id,
@@ -138,10 +194,25 @@ async def create_pipeline(
     db.add(pipeline)
     await db.flush()
 
+    await _sync_pipeline_asset(pipeline, db)
+    await db.flush()
+
     if pipeline.trigger_type == TriggerType.CRON and pipeline.status == PipelineStatus.ACTIVE:
         pipeline_scheduler.add_pipeline(str(pipeline.id), pipeline)
 
     return _pipeline_to_out(pipeline)
+
+
+@router.post("/from-conversation", response_model=PipelineOut, status_code=status.HTTP_201_CREATED)
+async def create_pipeline_from_conversation(
+    data: PipelineCreate,
+    current_user: User = Depends(get_current_user),
+    space_id: UUID | None = Depends(get_current_space_id),
+    member: SpaceMember = Depends(require_space_member),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create pipeline from conversation form data. Same as create but explicitly for widget submission."""
+    return await create_pipeline(data, current_user, space_id, member, db)
 
 
 @router.get("/{pipeline_id}", response_model=PipelineOut)
@@ -177,11 +248,14 @@ async def update_pipeline(
         pipeline.task_design = data.task_design
     if data.status is not None:
         pipeline.status = PipelineStatus(data.status)
+    if data.visibility is not None:
+        pipeline.visibility = data.visibility
 
     pipeline_scheduler.remove_pipeline(str(pipeline_id))
     if pipeline.status == PipelineStatus.ACTIVE and pipeline.trigger_type == TriggerType.CRON:
         pipeline_scheduler.add_pipeline(str(pipeline_id), pipeline)
 
+    await _sync_pipeline_asset(pipeline, db)
     await db.flush()
     return _pipeline_to_out(pipeline)
 

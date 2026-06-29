@@ -141,6 +141,13 @@ def build_agent_graph(
             temperature=0.7,
             anthropic_api_key=getattr(settings, 'ANTHROPIC_API_KEY', ''),
         )
+    elif model.startswith("deepseek"):
+        llm = ChatOpenAI(
+            model=model,
+            temperature=0.7,
+            openai_api_key=settings.DEEPSEEK_API_KEY or settings.OPENAI_API_KEY,
+            base_url="https://api.deepseek.com/v1",
+        )
     else:
         llm = ChatOpenAI(
             model=model,

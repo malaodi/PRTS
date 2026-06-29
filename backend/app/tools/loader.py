@@ -128,6 +128,9 @@ def discover_custom_tools(space_id: str = "") -> Dict[str, StructuredTool]:
         if manifest is None:
             continue
 
+        if not os.path.isfile(manifest.source_path):
+            continue
+
         cache_key = hashlib.md5(
             f"{manifest.source_path}_{os.path.getmtime(manifest.source_path)}".encode()
         ).hexdigest()

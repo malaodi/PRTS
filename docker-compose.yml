@@ -22,12 +22,10 @@ services:
     environment:
       DATABASE_URL: "postgresql+asyncpg://prts:prts@postgres:5432/prts"
       DATABASE_SYNC_URL: "postgresql+psycopg2://prts:prts@postgres:5432/prts"
-      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
-      LANGCHAIN_API_KEY: "${LANGCHAIN_API_KEY:-}"
-      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
-      DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY:-}"
       MILVUS_HOST: "milvus"
       MILVUS_PORT: "19530"
+    env_file:
+      - ./backend/.env
     depends_on:
       postgres:
         condition: service_healthy

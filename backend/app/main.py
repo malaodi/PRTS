@@ -11,6 +11,7 @@ from app.api.hub import router as hub_router
 from app.api.pipelines import router as pipelines_router
 from app.api.agents import router as agents_router
 from app.api.channels import router as channels_router
+from app.api.studio import router as studio_router
 
 settings = get_settings()
 
@@ -35,6 +36,7 @@ def create_app() -> FastAPI:
     app.include_router(pipelines_router, prefix="/api/v1")
     app.include_router(agents_router, prefix="/api/v1")
     app.include_router(channels_router, prefix="/api/v1")
+    app.include_router(studio_router, prefix="/api/v1")
 
     @app.get("/api/v1/health")
     async def health():

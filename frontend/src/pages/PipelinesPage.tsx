@@ -11,6 +11,8 @@ interface Pipeline {
   trigger_config: any
   task_design: string
   status: string
+  visibility: string | null
+  tags: string | null
   created_at: string | null
   last_run_at: string | null
 }
@@ -45,6 +47,7 @@ export default function PipelinesPage() {
     trigger_type: 'cron',
     cron_expr: '0 9 * * *',
     task_design: '',
+    visibility: 'private',
   })
 
   const fetchPipelines = async () => {
@@ -73,8 +76,9 @@ export default function PipelinesPage() {
         trigger_type: form.trigger_type,
         trigger_config: { expression: form.cron_expr },
         task_design: form.task_design,
+        visibility: form.visibility,
       })
-      setForm({ name: '', description: '', trigger_type: 'cron', cron_expr: '0 9 * * *', task_design: '' })
+      setForm({ name: '', description: '', trigger_type: 'cron', cron_expr: '0 9 * * *', task_design: '', visibility: 'private' })
       setShowCreate(false)
       fetchPipelines()
     } catch {}
@@ -196,6 +200,29 @@ export default function PipelinesPage() {
                 </p>
               </div>
             )}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">描述</label>
+                <input
+                  className="input-field"
+                  placeholder="管道功能描述"
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">可见性</label>
+                <select
+                  className="input-field"
+                  value={form.visibility}
+                  onChange={(e) => setForm({ ...form, visibility: e.target.value })}
+                >
+                  <option value="private">仅自己</option>
+                  <option value="team">团队可见</option>
+                  <option value="public">公开（广场）</option>
+                </select>
+              </div>
+            </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">任务描述</label>
               <textarea

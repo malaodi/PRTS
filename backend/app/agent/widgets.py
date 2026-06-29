@@ -38,6 +38,7 @@ class FormField(BaseModel):
     placeholder: str = ""
     required: bool = False
     default: str = ""
+    options: List[dict] | None = None  # for select/multiselect/credential types
 
 
 class FormWidget(BaseModel):
