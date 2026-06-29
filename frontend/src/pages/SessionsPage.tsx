@@ -45,7 +45,7 @@ export default function SessionsPage() {
       return
     }
     localStorage.setItem('current_thread_id', session.thread_id)
-    navigate(`/chat`)
+    navigate(`/chat?session=${encodeURIComponent(session.thread_id)}`)
   }
 
   const formatTime = (s: string | null) => {

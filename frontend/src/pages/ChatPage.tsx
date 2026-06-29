@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Send, Loader2, ArrowDown, Check, X, Wrench, ChevronDown, ChevronUp } from 'lucide-react'
 import { useSpaceStore } from '@/stores'
 import api from '@/api/client'
@@ -45,13 +46,23 @@ export default function ChatPage() {
   const [showToolPanel, setShowToolPanel] = useState(false)
   const [threadId, setThreadId] = useState<string>('')
   const [loaded, setLoaded] = useState(false)
+  const [searchParams, setSearchParams] = useSearchParams()
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const currentSpace = useSpaceStore((s) => s.currentSpace)
   const userScrolledUpRef = useRef(false)
 
-  // Load thread_id from localStorage and fetch history on mount
+  // Load thread_id from localStorage or URL param, fetch history
   useEffect(() => {
+    const paramThread = searchParams.get('session')
+    if (paramThread) {
+      setMessages([])
+      setLoaded(false)
+      localStorage.setItem('current_thread_id', paramThread)
+      loadMessages(paramThread)
+      return
+    }
+
     const stored = localStorage.getItem('current_thread_id')
     if (!stored) {
       setLoaded(true)
@@ -63,7 +74,20 @@ export default function ChatPage() {
       return
     }
     setThreadId(stored)
-    api.get(`/agent/messages?thread_id=${encodeURIComponent(stored)}`)
+    loadMessages(stored)
+  }, [searchParams])
+
+  const loadMessages = (tid: string) => {
+    const token = localStorage.getItem('access_token')
+    if (!token) { setLoaded(true); return }
+    setThreadId(tid)
+    // Clean URL after capturing session param
+    if (searchParams.has('session')) {
+      const newParams = new URLSearchParams(searchParams)
+      newParams.delete('session')
+      setSearchParams(newParams, { replace: true })
+    }
+    api.get(`/agent/messages?thread_id=${encodeURIComponent(tid)}`)
       .then((res) => {
         const msgs = (res.data || []).map((m: any, i: number) => ({
           id: `hist-${i}`,
@@ -76,7 +100,7 @@ export default function ChatPage() {
         console.error('Load session messages failed:', err)
       })
       .finally(() => setLoaded(true))
-  }, [])
+  }
 
   const isNearBottom = useCallback(() => {
     const el = messagesContainerRef.current
