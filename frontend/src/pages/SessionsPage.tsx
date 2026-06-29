@@ -143,8 +143,8 @@ export default function SessionsPage() {
       }
       setMessages((prev) => prev.map((m) => {
         if (m.id !== assistantMsg.id || !m.content) return m
-        const match = m.content.match(/\[WIDGET:({[\s\S]*?})\]/)
-        if (match) { try { return { ...m, widget: JSON.parse(match[1]), content: m.content.replace(/\[WIDGET:{[\s\S]*?}\]/, '').trim() } } catch {} }
+        const w = extractWidget(m.content)
+        if (w) return { ...m, widget: w, content: stripWidgetMarker(m.content) }
         return m
       }))
     } catch {
@@ -382,4 +382,21 @@ function FormWidget({ fields, onSubmit, onCancel }: { fields: WidgetData['fields
       </div>
     </form>
   )
+}
+
+function extractWidget(content: string): WidgetData | null {
+  const start = content.lastIndexOf('[WIDGET:')
+  if (start === -1) return null
+  const jsonStart = start + 8
+  const end = content.indexOf(']', jsonStart)
+  if (end === -1) return null
+  try { return JSON.parse(content.substring(jsonStart, end)) } catch { return null }
+}
+
+function stripWidgetMarker(content: string): string {
+  const start = content.lastIndexOf('[WIDGET:')
+  if (start === -1) return content
+  const end = content.indexOf(']', start)
+  if (end === -1) return content
+  return (content.substring(0, start) + content.substring(end + 1)).trim()
 }
