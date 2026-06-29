@@ -75,7 +75,34 @@ BUILTIN_SKILLS_TEXT = """## 内置技能使用说明
 平台内置系统技能（skill-creator、subagent-creator 等）会通过 `read` 工具加载。
 当用户表达"保存为技能"、"创建伙伴"等意图时，使用 `read` 读取对应 SKILL.md 文件获取指导。
 资产沉淀流程：生成内容 → 调用 `create_asset` 工具弹窗确认 → 用户确认后写入空间。
-发布流程：调用 `publish_asset` 工具执行AI审查 → 索引到 Milvus 广场 → 上架。"""
+发布流程：调用 `publish_asset` 工具执行AI审查 → 索引到 Milvus 广场 → 上架。
+
+## 自动化流程创建规则
+
+当用户表达创建自动化任务/流水线/定时任务/监控/爬虫/报告生成的意图时，**不要直接回复文字**。
+必须先调用 `show_widget` 弹出一个表单问卷来收集必要信息。
+
+表单字段规则：
+- **必须包含**的字段：name(名称,text,必填)、trigger_type(触发方式,select,cron/webhook/event,必填)、task_design(任务描述,textarea,必填)、visibility(可见性,select,private/team/public,必填)
+- **按需包含**的字段：cron_expr(定时表达式,text,仅trigger_type=cron时显示)、description(描述,text)、requires_credentials(需要凭据,multiselect)
+- select/multiselect 类型的 field_type 必须提供 options 数组，每项含 value 和 label
+- 触发方式为 cron 时，trigger_config 会自动设置为 {"expression": cron_expr}
+- trigger_type 为 webhook 时不显示 cron_expr 字段
+- 任务描述中不要包含"请填写"这种冗余文字，直接写清楚要做什么
+
+用户提交表单后，收集 formData 调用 create_asset(type="pipeline", ...) 或直接调用 POST /pipelines/from-conversation。
+
+示例：用户说"帮我每天9点抓取竞品新闻"
+→ 调用 show_widget(form):
+fields=[
+  {key:"name", label:"自动化名称", field_type:"text", required:true, default:"竞品新闻抓取"},
+  {key:"trigger_type", label:"触发方式", field_type:"select", required:true, options:[{value:"cron",label:"定时"}, {value:"webhook",label:"Webhook"}]},
+  {key:"cron_expr", label:"定时表达式", field_type:"text", placeholder:"0 9 * * *", default:"0 9 * * *"},
+  {key:"task_design", label:"任务描述", field_type:"textarea", required:true, default:"每天9点抓取指定竞品的新闻内容并汇总到报告"},
+  {key:"visibility", label:"可见性", field_type:"select", required:true, options:[{value:"private",label:"仅自己"}, {value:"team",label:"团队"}, {value:"public",label:"广场"}]},
+]
+
+重要：使用 `show_widget` 工具时，type 参数必须是 "form"，并且用 options 数组传递 fields 定义。不要用 message 参数描述表单结构，要用 options 传递结构化数据。"""
 
 
 def build_system_prompt(

@@ -23,11 +23,17 @@ def set_creator_context(space_id: str, thread_id: str = ""):
 
 
 def get_pending_creation(thread_id: str) -> dict | None:
-    remove_ids = [k for k, v in _pending_creations.items() if v.get("thread_id") == thread_id]
-    creation = _pending_creations.get(thread_id)
-    for rid in remove_ids:
-        _pending_creations.pop(rid, None)
-    return creation
+    """Get pending creation by thread_id or any available."""
+    # Search by thread_id
+    for k, v in list(_pending_creations.items()):
+        if v.get("thread_id") == thread_id:
+            return _pending_creations.pop(k, None)
+    return None
+
+
+def get_pending_by_creation_id(creation_id: str) -> dict | None:
+    """Get pending creation by specific creation_id."""
+    return _pending_creations.pop(creation_id, None)
 
 
 @tool

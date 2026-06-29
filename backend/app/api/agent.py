@@ -196,6 +196,7 @@ async def chat(
     async def event_stream():
         assistant_content = []
         try:
+            yield f"data: {json.dumps({'type': 'metadata', 'thread_id': thread_id})}\n\n"
             async for event in agent_graph.astream_events(initial_state, config, version="v2"):
                 kind = event.get("event", "")
                 if kind == "on_chat_model_stream":

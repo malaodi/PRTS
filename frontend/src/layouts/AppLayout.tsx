@@ -207,7 +207,7 @@ export default function AppLayout() {
             <span>工作室</span>
           </Link>
         </div>
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-hidden flex flex-col">
           <Outlet />
         </div>
       </main>

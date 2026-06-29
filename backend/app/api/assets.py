@@ -9,7 +9,7 @@ from app.models.user import User
 from app.models.space import SpaceMember
 from app.models.asset import Asset, AssetType, AssetVisibility, AgentAssetBinding, BindStatus
 from app.api.deps import get_current_user, get_current_space_id, require_space_member
-from app.tools.asset_creator import get_pending_creation
+from app.tools.asset_creator import get_pending_creation, get_pending_by_creation_id
 from app.tools.marketplace_ops import index_asset_for_marketplace
 from app.tools.vector_ops import embed_and_store
 from pydantic import BaseModel
@@ -122,13 +122,16 @@ async def create_asset_endpoint(
 
 @router.post("/confirm-pending", response_model=AssetOut, status_code=status.HTTP_201_CREATED)
 async def confirm_pending_creation(
-    thread_id: str = Query(..., description="The conversation thread ID"),
+    thread_id: str = Query("", description="The conversation thread ID"),
+    creation_id: str = Query("", description="Or the creation ID from widget"),
     current_user: User = Depends(get_current_user),
     space_id: UUID | None = Depends(get_current_space_id),
     member: SpaceMember = Depends(require_space_member),
     db: AsyncSession = Depends(get_db),
 ):
-    pending = get_pending_creation(thread_id)
+    pending = get_pending_creation(thread_id) if thread_id else None
+    if not pending and creation_id:
+        pending = get_pending_by_creation_id(creation_id)
     if not pending:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No pending asset creation for this thread")
 
