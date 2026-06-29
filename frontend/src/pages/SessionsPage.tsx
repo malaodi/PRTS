@@ -109,7 +109,7 @@ export default function SessionsPage() {
                     <div className="text-xs text-gray-400 mt-0.5">
                       {formatTime(session.created_at)}
                       <span className="mx-1.5">·</span>
-                      <span className="font-mono text-gray-300 text-[10px]">{session.thread_id?.slice(0, 12)}</span>
+                      <span className="font-mono text-gray-300 text-[10px]">{session.thread_id?.slice(-30) || '(no id)'}</span>
                     </div>
                   </div>
                 </div>

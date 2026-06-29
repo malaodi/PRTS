@@ -350,6 +350,15 @@ export default function ChatPage() {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Debug bar */}
+      <div className="bg-yellow-100 border-b border-yellow-300 px-3 py-1 text-[10px] text-yellow-800 font-mono flex items-center gap-3 shrink-0 overflow-x-auto">
+        <span>threadId:{threadId ? threadId.slice(-20) : '(empty)'}</span>
+        <span>param:{searchParams.get('session')?.slice(-20) || '(none)'}</span>
+        <span>loaded:{loaded ? 'yes' : 'no'}</span>
+        <span>msgs:{messages.length}</span>
+        <span>ls:{localStorage.getItem('current_thread_id')?.slice(-20) || '(none)'}</span>
+      </div>
+
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-6 py-3 shrink-0 flex items-center justify-between">
         <div>
