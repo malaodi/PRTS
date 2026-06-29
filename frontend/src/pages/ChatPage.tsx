@@ -141,7 +141,7 @@ export default function ChatPage() {
     <div className="flex-1 flex flex-col overflow-hidden">
       <header className="bg-white border-b border-gray-200 px-6 py-3 shrink-0">
         <h2 className="text-sm font-semibold text-gray-900">{currentSpace ? currentSpace.name : 'PRTS Assistant'}</h2>
-        <p className="text-xs text-gray-400">{threadId ? '继续对话' : '新会话'}</p>
+        <p className="text-xs text-gray-400">{threadId ? '继续对话' : '新会话'} · v3</p>
       </header>
       <div ref={messagesContainerRef} onScroll={handleContainerScroll} className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
         {!loaded ? (
