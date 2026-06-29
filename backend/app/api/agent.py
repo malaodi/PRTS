@@ -26,6 +26,7 @@ from app.tools.memory_ops import set_memory_context
 from app.tools.inspiration_ops import set_inspiration_context
 from app.tools.asset_creator import set_creator_context
 from langchain_core.messages import HumanMessage
+from langchain_openai import ChatOpenAI
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 
@@ -226,7 +227,7 @@ async def chat(
             memory_lines.append(f"### {i}. {m.name}\n{m.content.strip()[:1000]}\n")
         system_prompt += "".join(memory_lines)
 
-    # Pipeline creation interceptor: detect keywords and return form widget directly
+    # Pipeline creation interceptor: detect keywords → LLM generates custom form widget
     import re
     pipeline_keywords = ["创建自动化", "创建管道", "创建pipeline", "定时任务", "自动化流程",
                          "新建自动化", "帮我自动化", "做一个自动化", "搞一个自动化",
@@ -238,29 +239,14 @@ async def chat(
                          bool(re.search(r"每周.*点", msg_lower))
 
     if is_pipeline_intent and not request.thread_id:
-        # Generate a default name from the user's message
-        default_name = request.message[:20].replace(" ", "")
-        default_task = request.message
-
-        form_widget = {
-            "type": "form",
-            "title": "创建自动化流程",
-            "message": "请填写以下信息，确认后将自动创建自动化任务",
-            "fields": [
-                {"key": "name", "label": "自动化名称", "field_type": "text", "required": True, "default": default_name},
-                {"key": "trigger_type", "label": "触发方式", "field_type": "select", "required": True,
-                 "options": [{"value": "cron", "label": "定时触发"}, {"value": "webhook", "label": "Webhook"}, {"value": "event", "label": "事件触发"}]},
-                {"key": "cron_expr", "label": "定时表达式", "field_type": "text", "placeholder": "0 9 * * *", "default": "0 9 * * *"},
-                {"key": "task_design", "label": "任务描述", "field_type": "textarea", "required": True, "default": default_task},
-                {"key": "visibility", "label": "可见性", "field_type": "select", "required": True,
-                 "options": [{"value": "private", "label": "仅自己"}, {"value": "team", "label": "团队"}, {"value": "public", "label": "广场"}]},
-            ],
-        }
-
         async def pipeline_form_stream():
             try:
                 yield f"data: {json.dumps({'type': 'metadata', 'thread_id': thread_id})}\n\n"
-                yield f"data: {json.dumps({'content': '我来帮你创建自动化流程，请填写以下表单：\\n\\n'})}\n\n"
+                yield f"data: {json.dumps({'content': '好的，让我来分析你的需求，生成一份定制化的表单…\\n\\n'})}\n\n"
+
+                # Call LLM to generate custom form
+                form_widget = await _generate_pipeline_form(request.message)
+
                 yield f"data: {json.dumps({'content': '[WIDGET:' + json.dumps(form_widget, ensure_ascii=False) + ']'})}\n\n"
                 yield f"data: {json.dumps({'done': True})}\n\n"
                 yield "data: [DONE]\n\n"
@@ -350,3 +336,85 @@ async def chat(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+PIPELINE_FORM_PROMPT = """You are a form generator. Given a user's request to create an automation, generate a form widget JSON.
+
+The user said: '{user_message}'
+
+Based on their request, create a form to collect all needed information. The form must be in this exact JSON format:
+{{
+  "type": "form",
+  "title": "简短的表单标题",
+  "message": "一行提示消息",
+  "fields": [
+    {{"key":"name","label":"自动化名称","field_type":"text","required":true,"default":"自动推断的名称"}},
+    {{"key":"trigger_type","label":"触发方式","field_type":"select","required":true,"options":[{{"value":"cron","label":"定时"}},{{"value":"webhook","label":"Webhook"}}]}},
+    {{"key":"cron_expr","label":"时间表达式","field_type":"text","placeholder":"0 9 * * *","default":"推断的时间"}},
+    {{"key":"task_design","label":"任务描述","field_type":"textarea","required":true,"default":"用户原话摘要"}},
+    {{"key":"visibility","label":"可见性","field_type":"select","required":true,"options":[{{"value":"private","label":"仅自己"}},{{"value":"team","label":"团队"}},{{"value":"public","label":"广场"}}]}}
+  ]
+}}
+
+Rules:
+- Infer a good name from the user's request. Keep it short (3-15 chars).
+- If the user mentions a time (e.g. "每天8点"), infer the cron expression. cron format: "分 时 日 月 周". "每天8点" = "0 8 * * *".
+- If user mentions a specific platform/tool (e.g. 企微/飞书/GitHub/Slack/邮件), add an extra field about it (e.g. channel selection).
+- If user mentions specific data sources or keywords, add relevant fields.
+- Only use field_types: text, textarea, select. No other types.
+- All fields MUST have a 'key' (english, snake_case), 'label' (Chinese), and 'field_type'.
+- Return ONLY the JSON object. No markdown, no explanation, no code fences."""
+
+
+async def _generate_pipeline_form(user_message: str) -> dict:
+    """Call LLM to generate a customized pipeline form widget based on user's message."""
+    from app.config import get_settings
+    cfg = get_settings()
+
+    api_key = cfg.OPENAI_API_KEY or cfg.DEEPSEEK_API_KEY
+    if not api_key:
+        return _fallback_form(user_message)
+
+    prompt = PIPELINE_FORM_PROMPT.replace("{user_message}", user_message).replace("{{", "{").replace("}}", "}")
+
+    try:
+        if cfg.DEEPSEEK_API_KEY and not cfg.OPENAI_API_KEY:
+            llm = ChatOpenAI(model="deepseek-chat", temperature=0.1, openai_api_key=cfg.DEEPSEEK_API_KEY, base_url="https://api.deepseek.com/v1")
+        else:
+            llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.1, openai_api_key=cfg.OPENAI_API_KEY)
+
+        response = await llm.ainvoke(prompt)
+        content = str(response.content).strip()
+
+        # Strip code fences if present
+        if content.startswith("```"):
+            content = "\n".join(content.split("\n")[1:])
+        if content.endswith("```"):
+            content = content[:-3].strip()
+
+        result = json.loads(content)
+        if result.get("type") == "form" and result.get("fields"):
+            return result
+    except Exception:
+        pass
+
+    return _fallback_form(user_message)
+
+
+def _fallback_form(user_message: str) -> dict:
+    """Hardcoded fallback form when LLM fails."""
+    name = user_message[:20].replace(" ", "")
+    return {
+        "type": "form",
+        "title": "创建自动化流程",
+        "message": "请填写以下信息",
+        "fields": [
+            {"key": "name", "label": "自动化名称", "field_type": "text", "required": True, "default": name},
+            {"key": "trigger_type", "label": "触发方式", "field_type": "select", "required": True,
+             "options": [{"value": "cron", "label": "定时"}, {"value": "webhook", "label": "Webhook"}]},
+            {"key": "cron_expr", "label": "定时表达式", "field_type": "text", "placeholder": "0 9 * * *", "default": "0 9 * * *"},
+            {"key": "task_design", "label": "任务描述", "field_type": "textarea", "required": True, "default": user_message},
+            {"key": "visibility", "label": "可见性", "field_type": "select", "required": True,
+             "options": [{"value": "private", "label": "仅自己"}, {"value": "team", "label": "团队"}, {"value": "public", "label": "广场"}]},
+        ],
+    }
