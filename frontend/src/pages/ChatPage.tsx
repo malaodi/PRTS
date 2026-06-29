@@ -53,6 +53,9 @@ export default function ChatPage() {
         }).catch(() => {}).finally(() => setLoaded(true))
       return
     }
+    // Clear stored thread for fresh conversations
+    setThreadId('')
+    localStorage.removeItem('current_thread_id')
     setLoaded(true)
   }, [searchParams])
 

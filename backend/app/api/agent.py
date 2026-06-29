@@ -386,11 +386,11 @@ async def _generate_pipeline_form(user_message: str) -> dict:
         response = await llm.ainvoke(prompt)
         content = str(response.content).strip()
 
-        # Strip code fences if present
-        if content.startswith("```"):
-            content = "\n".join(content.split("\n")[1:])
-        if content.endswith("```"):
-            content = content[:-3].strip()
+        # Strip markdown code fences (handle ```json, ```, etc.)
+        import re
+        fence_match = re.match(r'^```(?:json)?\s*\n(.*?)\n```\s*$', content, re.DOTALL)
+        if fence_match:
+            content = fence_match.group(1).strip()
 
         result = json.loads(content)
         if result.get("type") == "form" and result.get("fields"):
